@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import powersData from '../data/powers.json';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useReveal } from '../hooks/useReveal';
 import { elementClass, elementColor } from '../data/elementMeta';
 import PowerCard from '../components/PowerCard';
 import { ArrowUpRight, ArrowRight, Swords, Book, Spark } from '../components/Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 
 const RAIL_SIZE = 12;
 
 export default function Home() {
-  const navigate = useNavigate();
   const revealRef = useReveal();
   const [favoritos, setFavoritos] = useLocalStorage('pa:favoritos', []);
 
@@ -102,7 +102,7 @@ export default function Home() {
           <div className="hero__feature-media">
             <img
               className="hero__feature-img"
-              src={feature.imagem}
+              src={resolvePowerImage(feature.imagem)}
               alt={`Arte de ${feature.nome}`}
               fetchPriority="high"
             />
@@ -298,11 +298,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="arena__foot">
-                <Link
-                  className="btn"
-                  to="/duelo"
-                  onClick={() => navigate('/duelo')}
-                >
+                <Link className="btn" to="/duelo">
                   <Swords size={16} />
                   Entrar na arena
                   <ArrowRight className="btn__arrow" />

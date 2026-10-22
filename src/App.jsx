@@ -8,7 +8,9 @@ import Grimorio from './pages/Grimorio';
 import Afinidade from './pages/Afinidade';
 import Login from './pages/Login';
 import Cadastro from './pages/Cadastro';
+import Amigos from './pages/Amigos';
 import { AuthProvider } from './context/AuthContext';
+import { FriendsProvider } from './context/FriendsContext';
 import { Link } from 'react-router-dom';
 
 import './styles/fonts.css';
@@ -20,6 +22,7 @@ import './styles/catalog.css';
 import './styles/detail.css';
 import './styles/duel.css';
 import './styles/grimoire.css';
+import './styles/friends.css';
 
 const FOOTER_LINKS = [
   {
@@ -28,7 +31,8 @@ const FOOTER_LINKS = [
       { to: '/catalogo', label: 'Catálogo' },
       { to: '/duelo', label: 'Simulador de duelo' },
       { to: '/grimorio', label: 'Grimório' },
-      { to: '/afinidade', label: 'Teste de afinidade' }
+      { to: '/afinidade', label: 'Teste de afinidade' },
+      { to: '/amigos', label: 'Amigos & Batalhas' }
     ]
   },
   {
@@ -83,25 +87,28 @@ function Footer() {
 export default function App() {
   return (
     <AuthProvider>
-      <HashRouter>
-        <Header />
+      <FriendsProvider>
+        <HashRouter>
+          <Header />
 
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/catalogo" element={<Catalogo />} />
-            <Route path="/poder/:id" element={<Poder />} />
-            <Route path="/duelo" element={<Duelo />} />
-            <Route path="/grimorio" element={<Grimorio />} />
-            <Route path="/afinidade" element={<Afinidade />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="*" element={<Home />} />
-          </Routes>
-        </main>
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/catalogo" element={<Catalogo />} />
+              <Route path="/poder/:id" element={<Poder />} />
+              <Route path="/duelo" element={<Duelo />} />
+              <Route path="/grimorio" element={<Grimorio />} />
+              <Route path="/afinidade" element={<Afinidade />} />
+              <Route path="/amigos" element={<Amigos />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/cadastro" element={<Cadastro />} />
+              <Route path="*" element={<Home />} />
+            </Routes>
+          </main>
 
-        <Footer />
-      </HashRouter>
+          <Footer />
+        </HashRouter>
+      </FriendsProvider>
     </AuthProvider>
   );
 }

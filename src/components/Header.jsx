@@ -1,5 +1,6 @@
 import { NavLink, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
+import { useFriends } from '../context/FriendsContext';
 import { useEffect, useState } from 'react';
 
 const NAV = [
@@ -7,11 +8,13 @@ const NAV = [
   { to: '/catalogo', label: 'Catálogo', index: '02' },
   { to: '/duelo', label: 'Duelo', index: '03' },
   { to: '/grimorio', label: 'Grimório', index: '04' },
-  { to: '/afinidade', label: 'Afinidade', index: '05' }
+  { to: '/afinidade', label: 'Afinidade', index: '05' },
+  { to: '/amigos', label: 'Amigos', index: '06', notif: true }
 ];
 
 export default function Header() {
   const { currentUser, logout } = useAuth();
+  const { totalNotifications } = useFriends();
   const [open, setOpen] = useState(false);
 
   const fechar = () => setOpen(false);
@@ -38,9 +41,12 @@ export default function Header() {
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
-                className={({ isActive }) => `site-nav__link${isActive ? ' is-active' : ''}`}
+                className={({ isActive }) => `site-nav__link${isActive ? ' is-active' : ''}${item.notif ? ' header-notif' : ''}`}
               >
                 {item.label}
+                {item.notif && totalNotifications > 0 && (
+                  <span className="header-notif__badge">{totalNotifications}</span>
+                )}
               </NavLink>
             ))}
 
@@ -114,6 +120,9 @@ export default function Header() {
               >
                 {item.label}
                 <span>{item.index}</span>
+                {item.notif && totalNotifications > 0 && (
+                  <span className="fr-notif-dot" style={{ marginLeft: 'auto' }}>{totalNotifications}</span>
+                )}
               </NavLink>
             ))}
 

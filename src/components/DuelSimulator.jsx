@@ -5,6 +5,7 @@ import { getElementalMultiplier, getElementalRelation, getPlayerAffinityBonus } 
 import { elementClass } from '../data/elementMeta';
 import { narrarBatalha, analisarDuelo } from '../services/geminiService';
 import { Swords, Spark, Close, Star, Trash } from './Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 
 function baseScore(p) {
   return p.dano * 0.7 + (100 - p.custo) * 0.3 + Math.random() * 10;
@@ -37,7 +38,14 @@ function FighterSide({ power, valor, seletor, aoMudar, lado }) {
       </div>
 
       <div className="duel-side__thumb">
-        <img src={power.imagem} alt="" loading="lazy" />
+        <img
+          src={resolvePowerImage(power.imagem)}
+          alt={power.nome}
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.style.visibility = 'hidden';
+          }}
+        />
         <span className={`duel-side__badge${lado === 'b' ? ' duel-side__badge--b' : ''}`}>
           {power.alcance}
         </span>
@@ -101,6 +109,17 @@ export default function DuelSimulator({ initialPowerId = null }) {
   const powerB = useMemo(() => powersData.find((p) => p.id === Number(idB)), [idB]);
   const userAffinity = playerAffinity?.elemento || null;
 
+  const [prevPreselect, setPrevPreselect] = useState(preselect);
+  if (preselect !== prevPreselect) {
+    setPrevPreselect(preselect);
+    if (preselect !== null) {
+      setIdA(preselect);
+      if (idB === preselect) {
+        setIdB(preselect === powersData[0].id ? powersData[5].id : powersData[0].id);
+      }
+    }
+  }
+
   async function lutar() {
     if (!powerA || !powerB) return;
     if (powerA.id === powerB.id) {
@@ -159,10 +178,10 @@ export default function DuelSimulator({ initialPowerId = null }) {
 
     setLoadingNarracao(true);
     try {
-      setNarracao(await narrarBatalha(powerA, powerB, resumo));
+      const nar = await narrarBatalha(powerA, powerB, resumo);
+      if (nar) setNarracao(nar);
     } catch (err) {
-      console.error('[Gemini narrarBatalha]', err);
-      setErroIA(err?.message || 'Falha ao narrar a batalha.');
+      console.warn('[Narrar batalha]', err);
     } finally {
       setLoadingNarracao(false);
     }
@@ -174,10 +193,10 @@ export default function DuelSimulator({ initialPowerId = null }) {
     setAnalise(null);
     setErroIA(null);
     try {
-      setAnalise(await analisarDuelo(powerA, powerB));
+      const ana = await analisarDuelo(powerA, powerB);
+      if (ana) setAnalise(ana);
     } catch (err) {
-      console.error('[Gemini analisarDuelo]', err);
-      setErroIA(err?.message || 'Falha ao analisar.');
+      console.warn('[Analisar duelo]', err);
     } finally {
       setLoadingAnalise(false);
     }

@@ -1,12 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DB_CONFIG } from '../config/db';
+import { AuthContext } from './authContextInstance';
 
 const USERS_STORAGE_KEY = `${DB_CONFIG.dbName}_users_table`;
 const SESSION_STORAGE_KEY = `${DB_CONFIG.dbName}_auth_session`;
 
 // Nenhuma conta é pré-carregada: usuários se cadastram pelo formulário.
-
-const AuthContext = createContext(null);
 
 // Decodificador seguro de JWT do Google compatível com UTF-8
 function decodeGoogleJwt(token) {
@@ -381,12 +380,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth deve ser utilizado dentro de um AuthProvider');
-  }
-  return context;
 }

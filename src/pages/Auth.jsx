@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import powersData from '../data/powers.json';
 import { elementClass } from '../data/elementMeta';
 import { ArrowRight, ArrowUpRight, Spark, Check, AlertTriangle, Info } from '../components/Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 import '../styles/auth.css';
 
 const DESTAQUES = [
@@ -32,6 +33,8 @@ export default function Auth({ initialMode = 'login' }) {
     login,
     register,
     renderGoogleButton,
+    loginWithGoogleSimulated,
+    googleReady,
     currentUser
   } = useAuth();
 
@@ -46,16 +49,23 @@ export default function Auth({ initialMode = 'login' }) {
     }
   }, [currentUser, navigate]);
 
-  // Botão oficial do Google Identity Services. Enquanto ele não carrega,
-  // mostramos um aviso honesto em vez de um botão falso.
+  // Botão oficial do Google Identity Services. Quando pronto, renderiza;
+  // se falhar ou estiver offline, mantém a contingência acessível.
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let active = true;
+    const tryRender = () => {
       if (!googleBtnContainerRef.current) return;
       const ok = renderGoogleButton(googleBtnContainerRef.current, { width: 320 });
-      setGooglePronto(Boolean(ok));
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [renderGoogleButton]);
+      if (active && ok) setGooglePronto(true);
+    };
+
+    tryRender();
+    const timer = setTimeout(tryRender, 600);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [renderGoogleButton, googleReady]);
 
   function trocarModo(paraCadastro) {
     setAlert(null);
@@ -134,10 +144,19 @@ export default function Auth({ initialMode = 'login' }) {
         <div ref={googleBtnContainerRef} className="auth__google-native" />
 
         {!googlePronto && (
-          <p className="auth__google-off">
-            O acesso com Google não pôde ser carregado — o recurso depende de conexão com o
-            Google. Use e-mail e senha abaixo.
-          </p>
+          <div style={{ textAlign: 'center', marginBlock: '0.5rem' }}>
+            <p className="auth__google-off" style={{ marginBottom: '0.6rem' }}>
+              O prompt do Google não foi detectado externamente. Você pode usar a contingência ou entrar via e-mail.
+            </p>
+            <button
+              type="button"
+              className="btn btn--ghost btn--block"
+              onClick={() => loginWithGoogleSimulated()}
+              style={{ fontSize: '0.85rem' }}
+            >
+              Acesso rápido com Google (Demo)
+            </button>
+          </div>
         )}
 
         <div className="auth__divider">
@@ -262,7 +281,14 @@ export default function Auth({ initialMode = 'login' }) {
             .map((p) => (
               <li key={p.id} className={elementClass(p.elemento)}>
                 <Link to={`/poder/${p.id}`}>
-                  <img src={p.imagem} alt="" loading="lazy" />
+                  <img
+                    src={resolvePowerImage(p.imagem)}
+                    alt={p.nome}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.visibility = 'hidden';
+                    }}
+                  />
                   <span className="auth__showcase-copy">
                     <span className="tag">{p.elemento}</span>
                     <span className="auth__showcase-name">{p.nome}</span>

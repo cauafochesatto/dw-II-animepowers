@@ -1,0 +1,514 @@
+/* ============================================================================
+   ANIME POWERS — FRIENDS & BATTLES
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- page layout */
+.fr-page {
+  min-height: 100vh;
+  padding-bottom: 4rem;
+}
+
+/* ---------------------------------------------------------------- gate (not logged in) */
+.fr-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  padding-top: 6rem;
+  padding-bottom: 6rem;
+}
+
+.fr-gate__icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--signal);
+  margin-bottom: 0.5rem;
+}
+
+.fr-gate__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.fr-gate__sub {
+  color: var(--text-2);
+  max-width: 36ch;
+}
+
+.fr-gate__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+/* ---------------------------------------------------------------- hero */
+.fr-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-top: clamp(2rem, 5vw, 4rem);
+  padding-bottom: clamp(1.5rem, 3vw, 3rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.fr-hero__title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  text-transform: uppercase;
+  line-height: 0.95;
+  margin-bottom: 0.5rem;
+}
+
+.fr-hero__stats {
+  display: flex;
+  gap: 2rem;
+}
+
+.fr-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.fr-stat__value {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------------- body / tabs */
+.fr-body {
+  padding-top: 2.5rem;
+}
+
+.fr-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 2rem;
+}
+
+.fr-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.fr-tab {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.fr-tab:hover {
+  color: var(--text);
+}
+
+.fr-tab.is-active {
+  color: var(--signal);
+  border-bottom-color: var(--signal);
+}
+
+/* ---------------------------------------------------------------- notification dot */
+.fr-notif-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--signal);
+  color: var(--signal-ink);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------------- panel */
+.fr-panel {
+  animation: fr-panel-in 0.25s var(--ease-out) both;
+}
+
+@keyframes fr-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------------------------------------------------------------- section title */
+.fr-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.fr-empty-inline {
+  padding: 0.5rem 0 1rem;
+}
+
+/* ---------------------------------------------------------------- avatar */
+.fr-avatar {
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+}
+
+.fr-avatar--initials {
+  background: var(--surface-3);
+  color: var(--signal);
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+/* ---------------------------------------------------------------- list */
+.fr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.fr-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.fr-item:last-child {
+  border-bottom: none;
+}
+
+.fr-item:hover {
+  background: var(--surface-1);
+}
+
+.fr-item__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.fr-item__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fr-item__email {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fr-item__role {
+  margin-top: 0.1rem;
+}
+
+.fr-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.fr-item__actions--col {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* ---------------------------------------------------------------- badges */
+.fr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--r-sm);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fr-badge--pos  { background: color-mix(in oklch, var(--pos) 12%, transparent);  color: var(--pos); border: 1px solid color-mix(in oklch, var(--pos) 30%, transparent); }
+.fr-badge--neg  { background: color-mix(in oklch, var(--neg) 12%, transparent);  color: var(--neg); border: 1px solid color-mix(in oklch, var(--neg) 30%, transparent); }
+.fr-badge--warn { background: color-mix(in oklch, var(--signal) 12%, transparent); color: var(--signal); border: 1px solid color-mix(in oklch, var(--signal) 35%, transparent); }
+
+/* ---------------------------------------------------------------- search tab */
+.fr-search-bar {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.fr-search-bar__icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+}
+
+.fr-search-bar__input {
+  padding-left: 2.5rem !important;
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------- battle items */
+.fr-list--battles .fr-item {
+  align-items: flex-start;
+}
+
+.fr-item--battle {
+  gap: 0.75rem;
+}
+
+.fr-battle__meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fr-battle__from {
+  font-size: 0.9rem;
+}
+
+.fr-battle__deck {
+  color: var(--text-2);
+}
+
+.fr-battle__msg {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--signal);
+  border-left: 2px solid var(--signal-line);
+  padding-left: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+/* ---------------------------------------------------------------- empty state */
+.fr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 3.5rem 2rem;
+}
+
+.fr-empty__icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.fr-empty__title {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.fr-empty__sub {
+  color: var(--text-2);
+  max-width: 36ch;
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------- modal */
+.fr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fr-backdrop-in 0.2s var(--ease) both;
+}
+
+@keyframes fr-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.fr-modal {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  padding: 2rem;
+  width: 100%;
+  max-width: 460px;
+  animation: fr-modal-in 0.25s var(--ease-out) both;
+}
+
+@keyframes fr-modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.fr-modal__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  color: var(--muted);
+  transition: color var(--t-fast) var(--ease);
+}
+
+.fr-modal__close:hover {
+  color: var(--text);
+}
+
+.fr-modal__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--signal) 14%, transparent);
+  border: 1px solid var(--signal-line);
+  color: var(--signal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+}
+
+.fr-modal__icon--pos {
+  background: color-mix(in oklch, var(--pos) 14%, transparent);
+  border-color: color-mix(in oklch, var(--pos) 30%, transparent);
+  color: var(--pos);
+}
+
+.fr-modal__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 0.4rem;
+}
+
+.fr-modal__sub {
+  text-align: center;
+  color: var(--text-2);
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------- extra button states */
+.btn--neg {
+  background: color-mix(in oklch, var(--neg) 15%, transparent);
+  color: var(--neg);
+  border: 1px solid color-mix(in oklch, var(--neg) 35%, transparent);
+}
+
+.btn--neg:hover {
+  background: color-mix(in oklch, var(--neg) 25%, transparent);
+}
+
+.btn--sm {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
+}
+
+/* ---------------------------------------------------------------- header notification badge */
+.header-notif {
+  position: relative;
+}
+
+.header-notif__badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  padding: 0 3px;
+  background: var(--signal);
+  color: var(--signal-ink);
+  font-size: 0.6rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width: 640px) {
+  .fr-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fr-hero__stats {
+    gap: 1.25rem;
+  }
+
+  .fr-stat {
+    align-items: flex-start;
+  }
+
+  .fr-item {
+    flex-wrap: wrap;
+  }
+
+  .fr-item__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .fr-tab {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+  }
+}

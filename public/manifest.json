@@ -1,0 +1,49 @@
+{
+  "name": "Anime Powers — Arquivo de Técnicas",
+  "short_name": "Anime Powers",
+  "description": "Arquivo de técnicas de anime com atributos comparáveis, arena de duelo, grimório pessoal e teste de afinidade elemental.",
+  "id": "/poderesanime/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "any",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["entertainment", "education"],
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Catálogo",
+      "short_name": "Catálogo",
+      "description": "Ver o catálogo de técnicas",
+      "url": "./#/catalogo"
+    },
+    {
+      "name": "Duelo",
+      "short_name": "Duelo",
+      "description": "Abrir a arena de duelo",
+      "url": "./#/duelo"
+    },
+    {
+      "name": "Grimório",
+      "short_name": "Grimório",
+      "description": "Abrir o grimório pessoal",
+      "url": "./#/grimorio"
+    }
+  ]
+}

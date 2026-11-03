@@ -1,0 +1,437 @@
+/* ============================================================================
+   COMPONENTES COMPARTILHADOS
+   Cada componente tem forma própria; a consistência vem do sistema de
+   tokens e do uso de linhas de 1px, não da repetição do mesmo cartão.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- botões */
+.btn {
+  --btn-ink: var(--black);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.72rem 1.25rem;
+  border-radius: var(--r-md);
+  background: var(--signal);
+  color: var(--btn-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
+}
+
+.btn:hover { background: color-mix(in oklch, var(--signal) 88%, white); }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.btn--ghost:hover {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-max);
+}
+
+.btn--quiet {
+  background: transparent;
+  color: var(--muted);
+  padding-inline: 0.75rem;
+}
+
+.btn--quiet:hover { color: var(--text); background: var(--surface-2); }
+
+.btn--lg { padding: 0.95rem 1.75rem; font-size: 0.95rem; }
+.btn--block { width: 100%; justify-content: center; }
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+/* seta que cresce no hover (linguagem da referência) */
+.btn__arrow {
+  width: 0;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: width var(--t) var(--ease-out), opacity var(--t) var(--ease-out),
+    transform var(--t) var(--ease-out);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.btn:hover .btn__arrow,
+.btn:focus-visible .btn__arrow { width: 1.6em; opacity: 1; transform: none; }
+
+/* ------------------------------------------------------- campos de texto */
+.field { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.field__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9375rem;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.input::placeholder { color: var(--muted-2); }
+
+.input:hover,
+.select:hover,
+.textarea:hover { border-color: var(--line-strong); }
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--signal);
+  background: var(--surface-2);
+}
+
+.select {
+  appearance: none;
+  padding-right: 2.1rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: right 0.95rem top 55%, right 0.65rem top 55%;
+  background-size: 0.32rem 0.32rem, 0.32rem 0.32rem;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------- etiquetas */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--element, var(--muted));
+  white-space: nowrap;
+}
+
+.tag::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px var(--line);
+  background: var(--surface-1);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  transition: box-shadow var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+
+a.chip:hover {
+  box-shadow: inset 0 0 0 1px var(--line-max);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.chip[aria-pressed='true'],
+.chip.is-active {
+  box-shadow: inset 0 0 0 1px var(--signal);
+  color: var(--signal);
+}
+
+/* --------------------------------------------------------- estados / nota */
+.notice {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+.notice--signal { box-shadow: inset 0 0 0 1px var(--signal-line); }
+.notice--pos { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--pos) 45%, transparent); }
+.notice--neg { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--neg) 45%, transparent); color: var(--neg); }
+
+/* ------------------------------------------------------------ estado vazio */
+.empty-state {
+  display: grid;
+  gap: 1.25rem;
+  justify-items: start;
+  padding: clamp(2.5rem, 8vw, 5rem) 0;
+  border-top: 1px solid var(--line);
+}
+
+.empty-state__title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: clamp(1.75rem, 5vw, 3.25rem);
+  line-height: 0.92;
+  color: var(--text);
+}
+
+.empty-state__text { color: var(--muted); max-width: 44ch; }
+
+/* ---------------------------------------------------- trilho horizontal */
+.rail {
+  display: flex;
+  gap: var(--rail-gap, 0.75rem);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  /* espaço para o slide seguinte parecer "cortado", como na referência */
+  padding-right: 35vw;
+}
+
+.rail::-webkit-scrollbar { display: none; }
+
+.rail > * {
+  flex: 0 0 var(--rail-item, 260px);
+  scroll-snap-align: start;
+}
+
+@media (max-width: 720px) {
+  .rail { --rail-item: 208px; padding-right: 45vw; }
+}
+
+/* ------------------------------------------------------ cartão de poder */
+.pcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+.pcard:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+
+.pcard__media {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.pcard__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--t-slow) var(--ease-out), filter var(--t-slow) var(--ease-out);
+}
+
+.pcard:hover .pcard__img { transform: scale(1.07); }
+
+.pcard__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.75), transparent 45%);
+  opacity: 0;
+  transition: opacity var(--t) var(--ease);
+}
+
+.pcard:hover .pcard__scrim { opacity: 1; }
+
+.pcard__cta {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.pcard:hover .pcard__cta { opacity: 1; transform: none; }
+
+.pcard__media .tag {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.7rem;
+  z-index: 2;
+  padding: 0.28rem 0.5rem;
+  border-radius: var(--r-sm);
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.pcard__fav {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--text);
+  opacity: 0.32;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.8));
+  transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+
+.pcard:hover .pcard__fav,
+.pcard:focus-within .pcard__fav,
+.pcard__fav[aria-pressed='true'] { opacity: 1; }
+
+.pcard__fav:hover {
+  color: var(--signal);
+  background: rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.pcard__fav[aria-pressed='true'] { color: var(--signal); }
+
+.pcard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 0.9rem 0.9rem;
+  flex: 1;
+}
+
+.pcard__name {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  line-height: 1.08;
+  text-transform: uppercase;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.pcard:hover .pcard__name { color: var(--signal); }
+
+.pcard__meta {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.pcard__owner { color: var(--text-2); font-weight: 500; display: block; }
+
+/* atributos em bloco fixo de 3 colunas */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: auto;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
+.stat { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+
+.stat + .stat {
+  padding-left: 0.6rem;
+  margin-left: 0.6rem;
+  border-left: 1px solid var(--line);
+}
+
+.stat__label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.stat__value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat__value--dmg { color: var(--neg); }
+.stat__value--cost { color: var(--signal); }
+
+/* ---------------------------------------------------- linha de índice */
+.index-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+  transition: background var(--t-fast) var(--ease), padding-inline var(--t-fast) var(--ease);
+}
+
+.index-row:first-child { border-top: 0; }
+
+a.index-row:hover { background: var(--surface-1); padding-inline: 0.75rem; }
+
+.index-row__name {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: clamp(1.25rem, 2.6vw, 2rem);
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.index-row__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-self: end;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.index-row:hover .index-row__name { color: var(--signal); }

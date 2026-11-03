@@ -1,0 +1,171 @@
+/* ============================================================================
+   CATÁLOGO — barra de filtros compacta e coleção organizada
+   ============================================================================ */
+
+.catalog {
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2rem);
+}
+
+.catalog__toolbar {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 0 1.25rem;
+  border-block: 1px solid var(--line);
+}
+
+.catalog__search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.catalog__selects {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.catalog__ranges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.25rem;
+}
+
+.catalog__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* o select de elemento tinge o próprio texto com a cor do filtro */
+.select[class*='el-'] { color: var(--element); border-color: color-mix(in oklch, var(--element) 45%, var(--line)); }
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  appearance: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+  flex-shrink: 0;
+}
+
+.switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform var(--t) var(--ease-out), background var(--t-fast) var(--ease);
+}
+
+.switch input:checked { background: var(--signal); box-shadow: none; }
+.switch input:checked::after { transform: translateX(14px); background: var(--black); }
+
+/* faixa de valor duplo */
+.range__track { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+.range__slider { display: grid; gap: 0.3rem; }
+
+.range__value { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+input[type='range'] {
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--signal);
+  border: none;
+  transition: transform var(--t-fast) var(--ease);
+}
+
+input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+/* barra de resultado */
+.catalog__resultbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.catalog__resultbar strong { color: var(--text); font-weight: 600; }
+
+.catalog__active-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.55rem 0.3rem 0.65rem;
+  border-radius: var(--r-sm);
+  background: var(--signal-ink);
+  background: color-mix(in oklch, var(--signal) 16%, transparent);
+  color: var(--signal);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.filter-pill button {
+  color: inherit;
+  opacity: 0.7;
+  line-height: 1;
+  padding: 2px;
+  border-radius: var(--r-xs);
+}
+
+.filter-pill button:hover { opacity: 1; background: color-mix(in oklch, var(--signal) 30%, transparent); }
+
+/* grade de poderes */
+.pgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: clamp(0.75rem, 1.6vw, 1.1rem);
+}
+
+@media (max-width: 560px) {
+  .pgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .catalog__search-row { grid-template-columns: 1fr; }
+}
+
+/* faixa de rodapé do catálogo */

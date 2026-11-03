@@ -816,3 +816,4 @@ export function calculateBuildClassification(stats) {
   }
   return { rank: 'D', score: Math.round(finalScore), color: '#94a3b8', label: 'Aprendiz', glow: 'none' };
 }
+

@@ -113,3 +113,4 @@ export default function CharacterDetailModal({ character, copies = 1, onClose })
     </div>
   );
 }
+

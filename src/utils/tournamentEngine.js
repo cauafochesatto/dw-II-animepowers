@@ -71,7 +71,11 @@ export function createTournament(name = '', size = 8, customParticipants = [], u
 
   // Se o usuário passou sua build e quer participar, ele é o 1º competidor
   if (userBuild) {
-    participants.push(createFighterState(userBuild, userBuild.name || 'Sua Construção', false, 'A'));
+    const userFighter = createFighterState(userBuild, userBuild.name || 'Sua Construção', false, 'A');
+    if (userBuild.userId) {
+      userFighter.userId = userBuild.userId;
+    }
+    participants.push(userFighter);
   }
 
   // Adiciona participantes customizados (amigos ou builds salvas)
@@ -168,6 +172,8 @@ export function createTournament(name = '', size = 8, customParticipants = [], u
 
   return {
     id: tournamentId,
+    userId: userBuild?.userId || null,
+    user_id: userBuild?.userId || null,
     name: tournamentName,
     size: sanitizedSize,
     difficulty: selectedDiff,
@@ -243,7 +249,11 @@ export function resolveTournamentMatch(tournament, matchId, options = {}) {
   const finalMatch = finalRound.matches[0];
 
   if (finalMatch && finalMatch.status === 'completed' && finalMatch.winner) {
-    tournament.champion = finalMatch.winner;
+    const winnerFighter = finalMatch.winner;
+    tournament.champion = {
+      ...winnerFighter,
+      userId: winnerFighter.userId || (!winnerFighter.isAi ? (tournament.userId || tournament.user_id) : null),
+    };
     tournament.status = 'completed';
   } else {
     // Atualiza round atual do torneio

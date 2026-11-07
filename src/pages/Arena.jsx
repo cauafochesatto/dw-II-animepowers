@@ -90,6 +90,7 @@ export default function Arena() {
         playerBuild: activeBuild,
         opponentBuild: mode === '1v1' ? opponent1v1 : teamB2v2[0],
         mode,
+        token: currentUser.token || null,
       }).then((res) => {
         if (res?.spinsAwarded > 0) {
           setArenaRewardNotice(res.message || `🏆 Vitória na Arena! +${res.spinsAwarded} Giros recebidos!`);

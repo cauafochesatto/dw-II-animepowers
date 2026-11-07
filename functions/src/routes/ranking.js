@@ -10,7 +10,7 @@ rankingRouter.get('/', async (c) => {
       `SELECT
          r.user_id AS id,
          COALESCE(u.name, r.player_name) AS name,
-         COALESCE(u.avatar, r.avatar) AS avatar,
+         COALESCE(r.avatar, u.avatar, '/imagenspoderes/kamehamenha.jpg') AS avatar,
          r.rank,
          r.wins,
          r.losses,
@@ -30,7 +30,7 @@ rankingRouter.get('/', async (c) => {
       ranking: res.rows.map((row) => ({
         id: row.id,
         name: row.name,
-        avatar: row.avatar || '/poderesanime/imagenspoderes/kamehamenha.jpg',
+        avatar: row.avatar || '/imagenspoderes/kamehamenha.jpg',
         classification: { rank: row.rank || 'A', label: `Combatente Rank ${row.rank || 'A'}` },
         wins: Number(row.wins) || 0,
         losses: Number(row.losses) || 0,

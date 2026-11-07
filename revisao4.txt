@@ -1,0 +1,684 @@
+﻿diff --git a/functions/src/battleEngine.js b/functions/src/battleEngine.js
+index bccc98e..c5b090d 100644
+--- a/functions/src/battleEngine.js
++++ b/functions/src/battleEngine.js
+@@ -27,7 +27,7 @@ export function createFighterState(build, fighterName = 'Jogador', isAi = false,
+     2500
+   );
+ 
+-  const avatar = build?.avatar || build?.imagem || '/poderesanime/imagenspoderes/kamehamenha.jpg';
++  const avatar = build?.avatar || build?.imagem || '/imagenspoderes/kamehamenha.jpg';
+   const customName = build?.name || fighterName;
+   const signatureMove = build?.signatureMove || 'Golpe C├│smico Devastador';
+   const startingEnergy = clamp(Math.round(15 + sanitizedStats.energia * 0.35), 15, 60);
+@@ -267,20 +267,126 @@ export function scaleFighterStats(build, difficulty = 'medio') {
+ }
+ 
+ /**
+- * Recompensas oficiais em giros:
+- * - Arena Vit├│ria: 2 giros
+- * - Torneio F├ícil: 3 giros por vit├│ria
+- * - Torneio M├®dio: 5 giros por vit├│ria
+- * - Torneio Dif├¡cil: 8 giros por vit├│ria
++ * Retorna os giros concedidos oficialmente pelo backend
++ * Regras estritas:
++ * - Arena: 0 giros (independente de vit├│ria/derrota)
++ * - Torneio F├ícil: +3 giros (se vit├│ria)
++ * - Torneio M├®dio: +5 giros (se vit├│ria)
++ * - Torneio Dif├¡cil: +8 giros (se vit├│ria)
++ * - Qualquer derrota: 0 giros
+  */
+-export function getRewardSpins(source, difficulty = null, isWin = true) {
++export function getRewardSpins(mode = 'tournament', difficulty = 'medio', isWin = true) {
+   if (!isWin) return 0;
+-  if (source === 'arena') return 2;
+-  if (source === 'tournament') {
+-    if (difficulty === 'facil') return 3;
+-    if (difficulty === 'dificil') return 8;
+-    return 5; // medio
++  if (mode === 'arena') return 0;
++  if (mode === 'tournament') {
++    switch (difficulty) {
++      case 'facil': return 3;
++      case 'dificil': return 8;
++      case 'medio':
++      default:
++        return 5;
++    }
+   }
+   return 0;
+ }
+ 
++/**
++ * Valida├º├úo rigorosa e segura da conclus├úo do Torneio no backend.
++ * O servidor N├âO confia em flags booleanas (`isPlayerWinner`) enviadas pelo cliente.
++ * Analisa a integridade de todas as fases, rodadas, confrontos e Grande Final
++ * para comprovar se o jogador humano foi o verdadeiro campe├úo invicto.
++ */
++export function validateTournamentChampion(tournament, _userId = null) {
++  if (!tournament || typeof tournament !== 'object') {
++    return { isValid: false, reason: 'Objeto de torneio ausente ou inv├ílido.' };
++  }
++
++  // 1. Identificador e status
++  if (!tournament.id || typeof tournament.id !== 'string') {
++    return { isValid: false, reason: 'ID do torneio ausente ou inv├ílido.' };
++  }
++
++  if (tournament.status !== 'completed') {
++    return { isValid: false, reason: 'O torneio ainda n├úo foi conclu├¡do.' };
++  }
++
++  // 2. Dificuldade e tamanho
++  const validDifficulties = ['facil', 'medio', 'dificil'];
++  if (!validDifficulties.includes(tournament.difficulty)) {
++    return { isValid: false, reason: 'Dificuldade de torneio inv├ílida.' };
++  }
++
++  const validSizes = [4, 8, 16];
++  if (!validSizes.includes(Number(tournament.size))) {
++    return { isValid: false, reason: 'Tamanho de chave de torneio inv├ílido.' };
++  }
++
++  // 3. Rodadas esperadas
++  const expectedTotalRounds = Math.log2(Number(tournament.size));
++  if (!Array.isArray(tournament.rounds) || tournament.rounds.length !== expectedTotalRounds) {
++    return { isValid: false, reason: 'Estrutura de rodadas do torneio corrompida.' };
++  }
++
++  // 4. Participantes e identifica├º├úo do jogador humano
++  if (!Array.isArray(tournament.participants) || tournament.participants.length !== Number(tournament.size)) {
++    return { isValid: false, reason: 'N├║mero de participantes inv├ílido.' };
++  }
++
++  const playerParticipant = tournament.participants.find((p) => p && !p.isAi);
++  if (!playerParticipant) {
++    return { isValid: false, reason: 'Nenhum combatente humano participante encontrado no torneio.' };
++  }
++
++  const playerName = playerParticipant.name;
++
++  // 5. Valida├º├úo do Campe├úo declarado
++  if (!tournament.champion || typeof tournament.champion !== 'object') {
++    return { isValid: false, reason: 'Nenhum campe├úo foi coroado no torneio.' };
++  }
++
++  if (tournament.champion.isAi || tournament.champion.name !== playerName) {
++    return { isValid: false, reason: 'O jogador n├úo foi o campe├úo deste torneio.' };
++  }
++
++  // 6. Valida├º├úo da Grande Final
++  const finalRound = tournament.rounds[tournament.rounds.length - 1];
++  if (!finalRound || !Array.isArray(finalRound.matches) || finalRound.matches.length !== 1) {
++    return { isValid: false, reason: 'Confronto final n├úo encontrado na ├║ltima rodada.' };
++  }
++
++  const finalMatch = finalRound.matches[0];
++  if (finalMatch.status !== 'completed') {
++    return { isValid: false, reason: 'A Grande Final n├úo foi conclu├¡da.' };
++  }
++
++  if (!finalMatch.winner || finalMatch.winner.isAi || finalMatch.winner.name !== playerName) {
++    return { isValid: false, reason: 'O vencedor da Grande Final n├úo ├® o jogador.' };
++  }
++
++  // 7. Valida├º├úo da trilha de vit├│rias (o jogador deve ter vencido o confronto em cada rodada)
++  for (const round of tournament.rounds) {
++    const playerMatch = round.matches.find(
++      (m) =>
++        m.status === 'completed' &&
++        ((m.fighter1 && m.fighter1.name === playerName) || (m.fighter2 && m.fighter2.name === playerName))
++    );
++
++    if (!playerMatch) {
++      return { isValid: false, reason: `O jogador n├úo participou de confronto v├ílido na fase: ${round.name}.` };
++    }
++
++    if (!playerMatch.winner || playerMatch.winner.name !== playerName) {
++      return { isValid: false, reason: `O jogador foi derrotado na fase: ${round.name}.` };
++    }
++  }
++
++  // Vit├│ria leg├¡tima comprovada
++  const spins = getRewardSpins('tournament', tournament.difficulty, true);
++  return {
++    isValid: true,
++    difficulty: tournament.difficulty,
++    rewardSpins: spins,
++    playerName,
++  };
++}
++
+diff --git a/functions/src/routes/battles.js b/functions/src/routes/battles.js
+index b4de4c1..81dc5a1 100644
+--- a/functions/src/routes/battles.js
++++ b/functions/src/routes/battles.js
+@@ -1,6 +1,11 @@
+ import { Hono } from 'hono';
+ import { query, withTransaction } from '../db.js';
+-import { simulate1v1, scaleFighterStats, getRewardSpins } from '../battleEngine.js';
++import {
++  simulate1v1,
++  scaleFighterStats,
++  getRewardSpins,
++  validateTournamentChampion,
++} from '../battleEngine.js';
+ 
+ export const battlesRouter = new Hono();
+ 
+@@ -46,9 +51,10 @@ battlesRouter.post('/arena/resolve', async (c) => {
+     const simulation = simulate1v1(playerBuild, opponentBuild);
+     const isPlayerWinner = simulation.isPlayerWinner;
+ 
+-    const rewardSpins = isPlayerWinner ? getRewardSpins('arena', null, true) : 0;
++    // Regra da Economia: Arena N├âO concede giros
++    const rewardSpins = 0;
+ 
+-    // 3. Transa├º├úo at├┤mica no Neon: hist├│rico + recompensa + saldo de giros + ranking
++    // 3. Transa├º├úo at├┤mica no Neon: hist├│rico + recompensa (0) + ranking
+     const result = await withTransaction(async (client) => {
+       // Grava no hist├│rico de batalhas
+       await client.query(
+@@ -75,22 +81,9 @@ battlesRouter.post('/arena/resolve', async (c) => {
+         ['rew_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), userId, battleId, rewardSpins]
+       );
+ 
+-      // Atualiza saldo de giros se houve vit├│ria
+-      let newBalance = null;
+-      if (rewardSpins > 0) {
+-        const updateBalance = await client.query(
+-          `UPDATE users
+-           SET spins_balance = spins_balance + $1,
+-               updated_at = CURRENT_TIMESTAMP
+-           WHERE id = $2
+-           RETURNING spins_balance`,
+-          [rewardSpins, userId]
+-        );
+-        newBalance = updateBalance.rows[0]?.spins_balance;
+-      } else {
+-        const cur = await client.query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
+-        newBalance = cur.rows[0]?.spins_balance;
+-      }
++      // Consulta saldo atual
++      const cur = await client.query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
++      const newBalance = cur.rows[0]?.spins_balance ?? 0;
+ 
+       // Atualiza ranking_stats do jogador
+       await client.query(
+@@ -279,3 +272,204 @@ battlesRouter.post('/tournament/match', async (c) => {
+     return c.json({ error: 'Erro ao processar partida do torneio.' }, 500);
+   }
+ });
++
++/**
++ * Resolu├º├úo oficial e segura da Vit├│ria de Torneio (Conclus├úo do Campeonato)
++ * O backend N├âO confia em flags (`isPlayerWinner`) enviadas pelo cliente.
++ * Requer o objeto do torneio completo e valida├º├úo estrutural da chave e Grande Final.
++ * Concede a recompensa ├║nica de giros baseada na dificuldade:
++ * - F├ícil: +3 giros
++ * - M├®dio: +5 giros
++ * - Dif├¡cil: +8 giros
++ * - Derrota ou fraude: 0 giros
++ * Prote├º├úo at├┤mica e idempot├¬ncia estrita via chave composta (user_id, battle_id).
++ */
++battlesRouter.post('/tournament/resolve', async (c) => {
++  try {
++    const body = await c.req.json();
++    const {
++      userId,
++      tournament,
++      tournamentId,
++      playerBuild,
++    } = body;
++
++    if (!userId || (!tournament && !tournamentId)) {
++      return c.json({ error: 'Identificadores de usu├írio e torneio s├úo obrigat├│rios.' }, 400);
++    }
++
++    // 1. Valida├º├úo de seguran├ºa obrigat├│ria: n├úo aceita chamadas que n├úo enviem a estrutura do torneio
++    if (!tournament || typeof tournament !== 'object') {
++      return c.json({
++        success: false,
++        error: 'Valida├º├úo de integridade: a chave completa do torneio ├® obrigat├│ria para verifica├º├úo.',
++        spinsAwarded: 0,
++        isValid: false,
++      }, 403);
++    }
++
++    // 2. Valida├º├úo rigorosa no backend (participantes, rodadas, invencibilidade, Grande Final)
++    const validation = validateTournamentChampion(tournament, userId);
++    if (!validation.isValid) {
++      return c.json({
++        success: false,
++        error: validation.reason,
++        spinsAwarded: 0,
++        isValid: false,
++      }, 403);
++    }
++
++    const officialTournamentId = tournament.id || tournamentId;
++    // Identificador ├║nico com namespace de usu├írio: evita que dois jogadores com mesmo ID de torneio se bloqueiem
++    const battleLogId = `tourn_${userId}_${officialTournamentId}`;
++    const legacyBattleLogId = `tourn_${officialTournamentId}`;
++
++    // 3. Verifica├º├úo de idempot├¬ncia pr├®via
++    const existing = await query(
++      'SELECT id, spins_awarded FROM rewards_log WHERE (battle_id = $1 AND user_id = $2) OR (battle_id = $3 AND user_id = $2)',
++      [battleLogId, userId, legacyBattleLogId]
++    );
++
++    if (existing.rows.length > 0) {
++      const uRes = await query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
++      return c.json({
++        success: true,
++        alreadyProcessed: true,
++        message: 'A recompensa deste torneio j├í foi creditada anteriormente.',
++        spinsAwarded: 0,
++        currentSpins: uRes.rows[0]?.spins_balance ?? 0,
++      });
++    }
++
++    const rewardSpins = validation.rewardSpins;
++    const finalDifficulty = validation.difficulty;
++
++    // 4. Transa├º├úo at├┤mica no Neon PostgreSQL com trava FOR UPDATE
++    let result;
++    try {
++      result = await withTransaction(async (client) => {
++        // Bloqueia linha do usu├írio para evitar concorr├¬ncia simult├ónea
++        const userLock = await client.query(
++          'SELECT id, spins_balance FROM users WHERE id = $1 FOR UPDATE',
++          [userId]
++        );
++
++        if (userLock.rows.length === 0) {
++          throw new Error('Guerreiro n├úo encontrado no banco de dados.');
++        }
++
++        // Dupla checagem dentro da transa├º├úo protegida pelo bloqueio
++        const recheck = await client.query(
++          'SELECT id FROM rewards_log WHERE (battle_id = $1 AND user_id = $2) OR (battle_id = $3 AND user_id = $2)',
++          [battleLogId, userId, legacyBattleLogId]
++        );
++
++        if (recheck.rows.length > 0) {
++          return {
++            alreadyProcessed: true,
++            rewardSpins: 0,
++            newBalance: userLock.rows[0].spins_balance,
++          };
++        }
++
++        // Registra no hist├│rico de batalhas
++        await client.query(
++          `INSERT INTO battles_history
++           (id, user_id, mode, is_win, player_placement, opponent_name, opponent_avatar, player_build_snapshot, total_rounds)
++           VALUES ($1, $2, 'Torneio', true, 1, 'Grande Final do Torneio', NULL, $3, $4)
++           ON CONFLICT (id) DO NOTHING`,
++          [
++            battleLogId,
++            userId,
++            JSON.stringify(playerBuild || { name: validation.playerName || 'Campe├úo' }),
++            Array.isArray(tournament.rounds) ? tournament.rounds.length : 1,
++          ]
++        );
++
++        // Registra no log de recompensas (chave ├║nica)
++        await client.query(
++          `INSERT INTO rewards_log (id, user_id, battle_id, source, difficulty, spins_awarded)
++           VALUES ($1, $2, $3, 'tournament', $4, $5)`,
++          [
++            'rew_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
++            userId,
++            battleLogId,
++            finalDifficulty,
++            rewardSpins,
++          ]
++        );
++
++        // Credita os giros ao saldo do usu├írio no PostgreSQL
++        const updateBalance = await client.query(
++          `UPDATE users
++           SET spins_balance = spins_balance + $1,
++               updated_at = CURRENT_TIMESTAMP
++           WHERE id = $2
++           RETURNING spins_balance`,
++          [rewardSpins, userId]
++        );
++
++        const newBalance = updateBalance.rows[0]?.spins_balance ?? 0;
++
++        // Atualiza ranking_stats do campe├úo
++        await client.query(
++          `INSERT INTO ranking_stats (user_id, player_name, avatar, rank, wins, losses, total, win_rate)
++           VALUES ($1, $2, $3, 'S', 1, 0, 1, 100)
++           ON CONFLICT (user_id) DO UPDATE SET
++              wins = ranking_stats.wins + 1,
++              total = ranking_stats.total + 1,
++              win_rate = ROUND(((ranking_stats.wins + 1)::numeric / (ranking_stats.total + 1)::numeric) * 100),
++              updated_at = CURRENT_TIMESTAMP`,
++          [
++            userId,
++            playerBuild?.name || validation.playerName || 'Campe├úo',
++            playerBuild?.avatar || null,
++          ]
++        );
++
++        return { newBalance, rewardSpins, alreadyProcessed: false };
++      });
++    } catch (txErr) {
++      // Verifica especificamente viola├º├úo do ├¡ndice ├║nico de recompensas (idempot├¬ncia).
++      // Outros erros 23505 (como conflito de PK em battles_history) N├âO s├úo tratados aqui.
++      if (
++        txErr.code === '23505' &&
++        (txErr.constraint === 'idx_rewards_user_battle_unique' ||
++          txErr.constraint === 'rewards_log_battle_id_key' ||
++          (txErr.detail && txErr.detail.includes('battle_id')))
++      ) {
++        const uRes = await query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
++        return c.json({
++          success: true,
++          alreadyProcessed: true,
++          message: 'A recompensa deste torneio j├í foi creditada anteriormente.',
++          spinsAwarded: 0,
++          currentSpins: uRes.rows[0]?.spins_balance ?? 0,
++        });
++      }
++      throw txErr;
++    }
++
++    if (result.alreadyProcessed) {
++      return c.json({
++        success: true,
++        alreadyProcessed: true,
++        message: 'A recompensa deste torneio j├í foi creditada anteriormente.',
++        spinsAwarded: 0,
++        currentSpins: result.newBalance,
++      });
++    }
++
++    return c.json({
++      success: true,
++      isPlayerWinner: true,
++      spinsAwarded: result.rewardSpins,
++      newBalance: result.newBalance,
++      difficulty: finalDifficulty,
++      message: `­ƒÅå CAMPE├âO DO TORNEIO (${finalDifficulty.toUpperCase()})! Voc├¬ conquistou +${result.rewardSpins} Giros!`,
++    });
++  } catch (err) {
++    console.error('[Tournament Resolve Error]', err);
++    return c.json({ error: 'Erro ao validar e registrar premia├º├úo do torneio.' }, 500);
++  }
++});
+diff --git a/src/context/CharacterContext.jsx b/src/context/CharacterContext.jsx
+index 9220ae3..0bd6b73 100644
+--- a/src/context/CharacterContext.jsx
++++ b/src/context/CharacterContext.jsx
+@@ -322,16 +322,13 @@ function CharacterProviderInner({ currentUser, children }) {
+   }, [spins, collection, currentUser]);
+ 
+   /**
+-   * Reposi├º├úo gratuita de giros (sem moedas, sem pagamentos).
++   * Credita giros provenientes de recompensas leg├¡timas (como vit├│ria em Torneios).
+    */
+-  const replenishSpins = useCallback((amount = 10) => {
+-    setSpins((prev) => prev + amount);
+-    writeStorage(STORAGE_KEYS.LAST_REPLENISH, new Date().toISOString());
+-    return {
+-      success: true,
+-      message: `Voc├¬ recebeu +${amount} giros de recarga gratuita!`,
+-    };
+-  }, [STORAGE_KEYS.LAST_REPLENISH]);
++  const creditSpins = useCallback((amount = 0) => {
++    const qty = parseInt(amount, 10);
++    if (!qty || qty <= 0) return;
++    setSpins((prev) => prev + qty);
++  }, []);
+ 
+   /**
+    * Atualiza e valida a constru├º├úo do jogador.
+@@ -410,8 +407,22 @@ function CharacterProviderInner({ currentUser, children }) {
+     [savedBuilds]
+   );
+ 
++  /**
++   * Sincroniza o saldo local de giros com o valor confirmado pelo servidor Neon.
++   * Deve ser chamado APENAS com o `newBalance` real retornado pela API.
++   * N├âO soma nem subtrai: substitui pelo valor autoritativo do servidor.
++   */
++  const syncSpinsFromServer = useCallback((serverBalance) => {
++    const qty = parseInt(serverBalance, 10);
++    if (isNaN(qty) || qty < 0) return;
++    setSpins(qty);
++  }, []);
++
+   /**
+    * Registra resultado de batalha no hist├│rico e atualiza estat├¡sticas competitivas.
++   * IMPORTANTE: N├âO credita giros automaticamente via spinsAwarded para evitar
++   * dupla concess├úo. O cr├®dito de giros de torneio ├® feito via syncSpinsFromServer
++   * diretamente ap├│s confirma├º├úo da API. Arena n├úo concede giros (regra da economia).
+    */
+   const recordBattleResult = useCallback((battleResult) => {
+     const isWin = battleResult.isPlayerWinner;
+@@ -426,10 +437,12 @@ function CharacterProviderInner({ currentUser, children }) {
+       playerPlacement: battleResult.playerPlacement ?? (isWin ? 1 : 2),
+       totalRounds: battleResult.totalRounds,
+       opponentName:
++        battleResult.opponentName ||
+         battleResult.loser?.name ||
+         battleResult.winner?.name ||
+         (mode === '2v2' ? 'Equipe Advers├íria' : 'Arena de Grupo'),
+       opponentAvatar:
++        battleResult.opponentAvatar ||
+         battleResult.loser?.avatar ||
+         battleResult.winner?.avatar ||
+         '/poderesanime/imagenspoderes/kamehamenha.jpg',
+@@ -443,10 +456,9 @@ function CharacterProviderInner({ currentUser, children }) {
+ 
+     setBattleHistory((prev) => [historyRecord, ...prev].slice(0, 50));
+ 
+-    // Se a batalha concedeu recompensa oficial em giros, credita ao saldo
+-    if (battleResult.spinsAwarded && battleResult.spinsAwarded > 0) {
+-      setSpins((prev) => prev + battleResult.spinsAwarded);
+-    }
++    // Giros N├âO s├úo creditados via recordBattleResult.
++    // Recompensas de torneio usam syncSpinsFromServer (saldo confirmado pelo Neon).
++    // Arena n├úo concede giros (Regra da Economia).
+ 
+     setBattleStats((prev) => {
+       const wins = prev.wins + (isWin ? 1 : 0);
+@@ -476,7 +488,8 @@ function CharacterProviderInner({ currentUser, children }) {
+     battleHistory,
+     battleStats,
+     executeSpin,
+-    replenishSpins,
++    creditSpins,
++    syncSpinsFromServer,
+     updateActiveBuild,
+     saveBuildPreset,
+     loadBuildPreset,
+diff --git a/src/pages/Torneio.jsx b/src/pages/Torneio.jsx
+index cdbd501..c861bb5 100644
+--- a/src/pages/Torneio.jsx
++++ b/src/pages/Torneio.jsx
+@@ -13,14 +13,14 @@ import {
+ import { resolvePowerImage } from '../utils/imageHelper';
+ import GameSubNav from '../components/GameSubNav';
+ import { Swords, Check, Close } from '../components/Icons';
+-import { saveTournamentRecord, resolveTournamentMatchServer } from '../services/dataService';
++import { saveTournamentRecord, resolveTournamentVictoryServer } from '../services/dataService';
+ import '../styles/tournament.css';
+ import '../styles/game.css';
+ 
+ const STORAGE_KEY = 'ap:active_tournament';
+ 
+ export default function Torneio() {
+-  const { activeBuild, recordBattleResult } = useCharacterGame();
++  const { activeBuild, recordBattleResult, syncSpinsFromServer } = useCharacterGame();
+   const { friendIds, getUserById, getUserBuild } = useFriends();
+   const { currentUser } = useAuth();
+   const userTournamentKey = currentUser?.id ? `ap:${currentUser.id}:active_tournament` : 'ap:guest:active_tournament';
+@@ -105,44 +105,123 @@ export default function Torneio() {
+     setActiveMatch(match);
+   }
+ 
+-  const handleResolveMatch = useCallback((matchId) => {
+-    if (!tournament) return;
+-    const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
+-    const updated = resolveTournamentMatch(tournament, matchId);
+-    setTournament({ ...updated });
+-    setActiveMatch(null);
+-
+-    // Valida├º├úo online no Neon e concess├úo de giros proporcionais ├á dificuldade
+-    if (match && currentUser?.id) {
+-      const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
+-      const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
+-      if (isUser1 || isUser2) {
+-        const userFighter = isUser1 ? match.fighter1 : match.fighter2;
+-        const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
+-
+-        resolveTournamentMatchServer({
++  const checkAndAwardTournamentChampion = useCallback(
++    (updatedTournament) => {
++      // Apenas usu├írios autenticados podem receber recompensas de torneio
++      if (!currentUser?.id) return;
++
++      if (!updatedTournament || updatedTournament.status !== 'completed' || !updatedTournament.champion) {
++        return;
++      }
++
++      const champ = updatedTournament.champion;
++      // Apenas o campe├úo humano (n├úo IA) que seja o build ativo do usu├írio recebe recompensa
++      const isUserChampion = champ && !champ.isAi && champ.name === activeBuild?.name;
++
++      if (isUserChampion && !updatedTournament.rewardClaimed) {
++        updatedTournament.rewardClaimed = true;
++        const tournDiff = updatedTournament.difficulty || difficulty;
++
++        resolveTournamentVictoryServer({
+           userId: currentUser.id,
+-          matchId: `${tournament.id}_${matchId}`,
+-          tournamentId: tournament.id,
+-          playerBuild: userFighter,
+-          opponentBuild: opponentFighter,
+-          difficulty: tournament.difficulty || difficulty,
+-        }).then((res) => {
+-          if (res?.spinsAwarded > 0) {
+-            setTournamentNotice(res.message || `­ƒÅå Vit├│ria no Torneio! +${res.spinsAwarded} Giros creditados!`);
++          tournamentId: updatedTournament.id,
++          tournament: updatedTournament,
++          playerBuild: activeBuild,
++        })
++          .then((res) => {
++            if (!res?.success) {
++              // API retornou erro expl├¡cito (403 de valida├º├úo, etc.) - n├úo credita nada
++              const errorMsg = res?.error || 'Erro ao validar vit├│ria no servidor. Nenhum giro foi creditado.';
++              setTournamentNotice(`ÔÜá´©Å ${errorMsg}`);
++              return;
++            }
++
++            if (res.alreadyProcessed) {
++              // Recompensa j├í foi creditada anteriormente ÔÇö saldo do servidor ├® autoritativo
++              setTournamentNotice('A recompensa deste torneio j├í foi creditada anteriormente.');
++              if (typeof res.currentSpins === 'number') {
++                syncSpinsFromServer(res.currentSpins);
++              }
++              return;
++            }
++
++            const spinsAwarded = res.spinsAwarded ?? 0;
++            if (spinsAwarded > 0 && typeof res.newBalance === 'number') {
++              // Atualiza saldo com o valor confirmado pelo servidor (n├úo soma localmente)
++              syncSpinsFromServer(res.newBalance);
++            }
++
++            setTournamentNotice(
++              res.message ||
++                `­ƒÅå CAMPE├âO DO TORNEIO (${tournDiff.toUpperCase()})! +${spinsAwarded} Giros creditados pelo servidor!`
++            );
+             recordBattleResult({
+               mode: 'Torneio',
+-              isPlayerWinner: res.isPlayerWinner,
+-              rewardSpins: res.spinsAwarded,
+-              spinsAwarded: res.spinsAwarded,
+-              opponentName: opponentFighter.name,
+-              opponentAvatar: opponentFighter.avatar,
++              isPlayerWinner: true,
++              spinsAwarded: 0, // N├úo soma via recordBattleResult ÔÇö saldo j├í foi atualizado via syncSpinsFromServer
++              rewardSpins: spinsAwarded,
++              opponentName: 'Grande Final do Torneio',
++              opponentAvatar: resolvePowerImage('/imagenspoderes/kamehamenha.jpg'),
++            });
++          })
++          .catch(() => {
++            // Falha de rede ou API indispon├¡vel ÔÇö N├âO credita giros localmente
++            setTournamentNotice(
++              'ÔÜá´©Å N├úo foi poss├¡vel confirmar a vit├│ria com o servidor. Nenhum giro foi creditado. Tente novamente mais tarde.'
++            );
++            recordBattleResult({
++              mode: 'Torneio',
++              isPlayerWinner: true,
++              spinsAwarded: 0,
++              rewardSpins: 0,
++              opponentName: 'Grande Final do Torneio',
++              opponentAvatar: resolvePowerImage('/imagenspoderes/kamehamenha.jpg'),
++            });
++          });
++      }
++    },
++    [activeBuild, difficulty, currentUser, syncSpinsFromServer, recordBattleResult]
++  );
++
++  const handleResolveMatch = useCallback(
++    (matchId) => {
++      if (!tournament) return;
++      const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
++      const updated = resolveTournamentMatch(tournament, matchId);
++      setTournament({ ...updated });
++      setActiveMatch(null);
++
++      // Se a partida envolvia o jogador e ele perdeu, registra derrota (sem giros)
++      if (match) {
++        const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
++        const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
++        if (isUser1 || isUser2) {
++          const userFighter = isUser1 ? match.fighter1 : match.fighter2;
++          const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
++
++          // Localiza a partida atualizada
++          const resolvedMatch = updated.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
++          const isPlayerWinner = resolvedMatch?.winner?.name === userFighter?.name;
++
++          if (!isPlayerWinner) {
++            setTournamentNotice('Voc├¬ foi eliminado desta edi├º├úo do Torneio. Tente novamente na pr├│xima temporada!');
++            recordBattleResult({
++              mode: 'Torneio',
++              isPlayerWinner: false,
++              spinsAwarded: 0,
++              rewardSpins: 0,
++              opponentName: opponentFighter?.name || 'Rival do Torneio',
++              opponentAvatar: resolvePowerImage(opponentFighter?.avatar),
+             });
+           }
+-        }).catch(() => {});
++        }
+       }
+-    }
+-  }, [tournament, currentUser, activeBuild, difficulty, recordBattleResult]);
++
++      // Se o torneio foi conclu├¡do, verifica se o jogador ├® o campe├úo para creditar a premia├º├úo
++      checkAndAwardTournamentChampion(updated);
++    },
++    [tournament, activeBuild, recordBattleResult, checkAndAwardTournamentChampion]
++  );
+ 
+   function handleSimulateAll() {
+     if (!tournament) return;
+@@ -151,6 +230,7 @@ export default function Torneio() {
+       const updated = autoSimulateTournament(tournament);
+       setTournament({ ...updated });
+       setSimulatingAll(false);
++      checkAndAwardTournamentChampion(updated);
+     }, 400);
+   }
+ 

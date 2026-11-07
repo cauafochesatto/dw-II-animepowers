@@ -322,18 +322,6 @@ function CharacterProviderInner({ currentUser, children }) {
   }, [spins, collection, currentUser]);
 
   /**
-   * Reposição gratuita de giros (sem moedas, sem pagamentos).
-   */
-  const replenishSpins = useCallback((amount = 10) => {
-    setSpins((prev) => prev + amount);
-    writeStorage(STORAGE_KEYS.LAST_REPLENISH, new Date().toISOString());
-    return {
-      success: true,
-      message: `Você recebeu +${amount} giros de recarga gratuita!`,
-    };
-  }, [STORAGE_KEYS.LAST_REPLENISH]);
-
-  /**
    * Atualiza e valida a construção do jogador.
    * Regras:
    * - Não permite personagens que não estejam na coleção.
@@ -411,7 +399,21 @@ function CharacterProviderInner({ currentUser, children }) {
   );
 
   /**
+   * Sincroniza o saldo local de giros com o valor confirmado pelo servidor Neon.
+   * Deve ser chamado APENAS com o `newBalance` real retornado pela API.
+   * NÃO soma nem subtrai: substitui pelo valor autoritativo do servidor.
+   */
+  const syncSpinsFromServer = useCallback((serverBalance) => {
+    const qty = parseInt(serverBalance, 10);
+    if (isNaN(qty) || qty < 0) return;
+    setSpins(qty);
+  }, []);
+
+  /**
    * Registra resultado de batalha no histórico e atualiza estatísticas competitivas.
+   * IMPORTANTE: NÃO credita giros automaticamente via spinsAwarded para evitar
+   * dupla concessão. O crédito de giros de torneio é feito via syncSpinsFromServer
+   * diretamente após confirmação da API. Arena não concede giros (regra da economia).
    */
   const recordBattleResult = useCallback((battleResult) => {
     const isWin = battleResult.isPlayerWinner;
@@ -426,10 +428,12 @@ function CharacterProviderInner({ currentUser, children }) {
       playerPlacement: battleResult.playerPlacement ?? (isWin ? 1 : 2),
       totalRounds: battleResult.totalRounds,
       opponentName:
+        battleResult.opponentName ||
         battleResult.loser?.name ||
         battleResult.winner?.name ||
         (mode === '2v2' ? 'Equipe Adversária' : 'Arena de Grupo'),
       opponentAvatar:
+        battleResult.opponentAvatar ||
         battleResult.loser?.avatar ||
         battleResult.winner?.avatar ||
         '/poderesanime/imagenspoderes/kamehamenha.jpg',
@@ -443,10 +447,9 @@ function CharacterProviderInner({ currentUser, children }) {
 
     setBattleHistory((prev) => [historyRecord, ...prev].slice(0, 50));
 
-    // Se a batalha concedeu recompensa oficial em giros, credita ao saldo
-    if (battleResult.spinsAwarded && battleResult.spinsAwarded > 0) {
-      setSpins((prev) => prev + battleResult.spinsAwarded);
-    }
+    // Giros NÃO são creditados via recordBattleResult.
+    // Recompensas de torneio usam syncSpinsFromServer (saldo confirmado pelo Neon).
+    // Arena não concede giros (Regra da Economia).
 
     setBattleStats((prev) => {
       const wins = prev.wins + (isWin ? 1 : 0);
@@ -476,7 +479,7 @@ function CharacterProviderInner({ currentUser, children }) {
     battleHistory,
     battleStats,
     executeSpin,
-    replenishSpins,
+    syncSpinsFromServer,
     updateActiveBuild,
     saveBuildPreset,
     loadBuildPreset,

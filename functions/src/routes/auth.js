@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { query, withTransaction } from '../db.js';
+import { createAuthToken } from '../authHelper.js';
 
 export const authRouter = new Hono();
 
@@ -15,7 +16,8 @@ authRouter.post('/register', async (c) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = (username || cleanEmail.split('@')[0]).trim();
-    const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    // O servidor SEMPRE gera o identificador único para garantir integridade e isolamento
+    const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 
     // Verifica e-mail existente
     const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
@@ -47,6 +49,7 @@ authRouter.post('/register', async (c) => {
       success: true,
       message: 'Conta criada com sucesso! Você recebeu 20 giros iniciais.',
       user,
+      token: createAuthToken(user),
     });
   } catch (err) {
     console.error('[Register Error]', err);
@@ -54,32 +57,63 @@ authRouter.post('/register', async (c) => {
   }
 });
 
-// Login
+// Login com autenticação inequívoca e prevenção de colisão de nomes
 authRouter.post('/login', async (c) => {
   try {
     const body = await c.req.json();
     const { email, username, password } = body;
 
-    let userRes;
-    if (email) {
-      userRes = await query(
-        'SELECT id, name, username, email, password, avatar, role, spins_balance, provider FROM users WHERE LOWER(email) = $1',
-        [email.trim().toLowerCase()]
-      );
-    } else if (username) {
-      userRes = await query(
-        'SELECT id, name, username, email, password, avatar, role, spins_balance, provider FROM users WHERE LOWER(username) = $1',
-        [username.trim().toLowerCase()]
-      );
-    } else {
+    const cleanInput = (email || username || '').trim().toLowerCase();
+    if (!cleanInput) {
       return c.json({ error: 'Informe e-mail ou username.' }, 400);
     }
 
-    if (userRes.rows.length === 0) {
-      return c.json({ error: 'Guerreiro não encontrado no sistema.' }, 404);
+    let user = null;
+
+    if (cleanInput.includes('@')) {
+      // 1. Busca estrita por e-mail (chave única)
+      const emailRes = await query(
+        `SELECT id, name, username, email, password, avatar, role, spins_balance, provider
+         FROM users
+         WHERE LOWER(email) = $1`,
+        [cleanInput]
+      );
+      if (emailRes.rows.length > 0) {
+        user = emailRes.rows[0];
+      }
+    } else {
+      // 2. Busca estrita por username
+      const usernameRes = await query(
+        `SELECT id, name, username, email, password, avatar, role, spins_balance, provider
+         FROM users
+         WHERE LOWER(username) = $1`,
+        [cleanInput]
+      );
+
+      if (usernameRes.rows.length === 1) {
+        user = usernameRes.rows[0];
+      } else if (usernameRes.rows.length === 0) {
+        // 3. Fallback seguro para display name: só aceita se for estritamente unívoco
+        const nameRes = await query(
+          `SELECT id, name, username, email, password, avatar, role, spins_balance, provider
+           FROM users
+           WHERE LOWER(name) = $1`,
+          [cleanInput]
+        );
+
+        if (nameRes.rows.length > 1) {
+          return c.json({
+            error: 'Existem múltiplos guerreiros com este nome de exibição. Por favor, acesse utilizando seu e-mail cadastrado.',
+          }, 409);
+        } else if (nameRes.rows.length === 1) {
+          user = nameRes.rows[0];
+        }
+      }
     }
 
-    const user = userRes.rows[0];
+    if (!user) {
+      return c.json({ error: 'Guerreiro não encontrado no sistema.' }, 404);
+    }
 
     // Validação de senha se existir no banco
     if (user.password && password && user.password !== password) {
@@ -87,10 +121,12 @@ authRouter.post('/login', async (c) => {
     }
 
     delete user.password;
+    const token = createAuthToken(user);
     return c.json({
       success: true,
       message: `Bem-vindo de volta, ${user.name}!`,
       user,
+      token,
     });
   } catch (err) {
     console.error('[Login Error]', err);
@@ -126,10 +162,12 @@ authRouter.post('/google', async (c) => {
          RETURNING id, name, username, email, avatar, role, spins_balance, provider`,
         [picture || null, name || null, current.id]
       );
+      const userObj = updated.rows[0];
       return c.json({
         success: true,
-        message: `Bem-vindo de volta, ${updated.rows[0].name}!`,
-        user: updated.rows[0],
+        message: `Bem-vindo de volta, ${userObj.name}!`,
+        user: userObj,
+        token: createAuthToken(userObj),
       });
     }
 
@@ -159,6 +197,7 @@ authRouter.post('/google', async (c) => {
       success: true,
       message: `Conta Google cadastrada! Você recebeu 20 giros iniciais.`,
       user: newUser,
+      token: createAuthToken(newUser),
     });
   } catch (err) {
     console.error('[Google Auth Error]', err);

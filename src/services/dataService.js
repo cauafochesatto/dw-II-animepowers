@@ -109,11 +109,20 @@ export async function saveUserRecord(user) {
 
   // Tenta sincronizar com API Neon Functions
   try {
-    await fetch(`${API_BASE}/auth/register`, {
+    const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.token) {
+        user.token = data.token;
+      }
+      if (data.user?.id) {
+        user.id = data.user.id;
+      }
+    }
   } catch {
     // Mantém gravado localmente
   }
@@ -179,6 +188,19 @@ export async function fetchUserFriendships(userId) {
 export async function requestFriendship(userId, friendId) {
   if (!userId || !friendId) return { success: false, message: 'Identificadores inválidos.' };
   if (userId === friendId) return { success: false, message: 'Você não pode adicionar seu próprio perfil.' };
+
+  // Verifica se correspondem à mesma conta localmente
+  const allUsersList = readLocal(STORAGE_KEYS.USERS, []);
+  const u1 = allUsersList.find((u) => u.id === userId);
+  const u2 = allUsersList.find((u) => u.id === friendId);
+  if (u1 && u2) {
+    if (
+      (u1.email && u2.email && u1.email.toLowerCase() === u2.email.toLowerCase()) ||
+      (u1.username && u2.username && u1.username.toLowerCase() === u2.username.toLowerCase())
+    ) {
+      return { success: false, message: 'Você não pode adicionar seu próprio perfil.' };
+    }
+  }
 
   // 1. Tenta envio online via Neon Functions
   try {
@@ -324,9 +346,10 @@ export async function fetchRankingOnline() {
 
 export async function resolveArenaBattleServer(payload) {
   try {
+    const headers = getAuthHeaders(payload?.token);
     const res = await fetch(`${API_BASE}/battles/arena/resolve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     if (res.ok) {
@@ -338,11 +361,44 @@ export async function resolveArenaBattleServer(payload) {
   return null;
 }
 
+export function getAuthHeaders(customToken = null) {
+  let token = customToken;
+  if (!token) {
+    try {
+      const session = localStorage.getItem(`${DB_CONFIG.dbName}_auth_session`);
+      if (session) {
+        const parsed = JSON.parse(session);
+        token = parsed.token;
+      }
+    } catch {
+      // Ignora erro de leitura local
+    }
+  }
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function resolveTournamentVictoryServer(payload) {
+  const headers = getAuthHeaders(payload?.token);
+  const res = await fetch(`${API_BASE}/battles/tournament/resolve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  // Sempre retorna o JSON independente do status HTTP para que o caller possa inspecionar error/success.
+  // Exceções de rede (fetch falhou) propagam para o .catch() do caller.
+  return await res.json();
+}
+
 export async function resolveTournamentMatchServer(payload) {
   try {
+    const headers = getAuthHeaders(payload?.token);
     const res = await fetch(`${API_BASE}/battles/tournament/match`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     if (res.ok) {
@@ -350,6 +406,23 @@ export async function resolveTournamentMatchServer(payload) {
     }
   } catch (err) {
     console.warn('[dataService] Falha ao registrar partida do torneio na API Neon:', err);
+  }
+  return null;
+}
+
+export async function startTournamentServer(tournament, customToken = null) {
+  try {
+    const headers = getAuthHeaders(customToken);
+    const res = await fetch(`${API_BASE}/battles/tournament/start`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ tournament }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[dataService] Falha ao registrar torneio na API Neon:', err);
   }
   return null;
 }
@@ -496,5 +569,10 @@ export async function saveTournamentRecord(tournament) {
 
   writeLocal(STORAGE_KEYS.TOURNAMENTS, updated);
   notifySync('TOURNAMENT_UPDATED', { id: tournament.id });
+
+  if (tournament.userId || tournament.user_id) {
+    startTournamentServer(tournament).catch(() => {});
+  }
+
   return { success: true, tournament };
 }

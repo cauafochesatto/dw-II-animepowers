@@ -13,14 +13,12 @@ export default function Giros() {
     spins,
     spinHistory,
     executeSpin,
-    replenishSpins,
   } = useCharacterGame();
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [revealedPulled, setRevealedPulled] = useState([]);
   const [showRevealModal, setShowRevealModal] = useState(false);
   const [selectedCharDetail, setSelectedCharDetail] = useState(null);
-  const [bannerNotice, setBannerNotice] = useState(null);
 
   function handleSpin(count) {
     if (spins < count || isSpinning) return;
@@ -35,12 +33,6 @@ export default function Giros() {
         setShowRevealModal(true);
       }
     }, count > 1 ? 900 : 700);
-  }
-
-  function handleReplenish() {
-    const res = replenishSpins(10);
-    setBannerNotice(res.message);
-    setTimeout(() => setBannerNotice(null), 4000);
   }
 
   const lastPulled = revealedPulled[revealedPulled.length - 1];
@@ -61,22 +53,6 @@ export default function Giros() {
       <div className="game-shell">
         <GameSubNav />
 
-        {bannerNotice && (
-          <div
-            style={{
-              padding: '0.8rem 1.2rem',
-              background: 'rgba(16, 185, 129, 0.2)',
-              border: '1px solid var(--pos)',
-              borderRadius: 'var(--r-sm)',
-              marginBottom: '1.5rem',
-              color: 'var(--pos)',
-              fontWeight: 700,
-            }}
-          >
-            {bannerNotice}
-          </div>
-        )}
-
         <div className="spin-hero">
           {/* Palco Principal de Giros */}
           <div className="spin-stage">
@@ -87,16 +63,6 @@ export default function Giros() {
                 Giros Disponíveis:
               </span>
               <span className="spin-counter__number">{spins}</span>
-              {spins === 0 && (
-                <button
-                  type="button"
-                  className="btn-replenish"
-                  onClick={handleReplenish}
-                  title="Recarga emergencial de testes para quando o saldo for zerado"
-                >
-                  + Repor Reserva (+10)
-                </button>
-              )}
             </div>
 
             <p
@@ -109,7 +75,7 @@ export default function Giros() {
                 lineHeight: 1.4,
               }}
             >
-              ⚔️ <strong>Economia Oficial:</strong> Novos guerreiros iniciam com 20 giros. Conquiste mais giros vencendo na <strong>Arena (+2)</strong> ou no <strong>Torneio (+3 a +8)</strong>!
+              ⚔️ <strong>Economia Oficial:</strong> Novos guerreiros iniciam com 20 giros. A única maneira de conquistar mais giros é vencendo o <strong>Modo Torneio (Fácil +3, Médio +5, Difícil +8)</strong>!
             </p>
 
             <div className={`spin-portal${isSpinning ? ' is-spinning' : ''}`}>

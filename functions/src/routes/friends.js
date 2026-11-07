@@ -129,6 +129,20 @@ friendsRouter.post('/request', async (c) => {
       return c.json({ error: 'Você não pode enviar solicitação de amizade para si mesmo.' }, 400);
     }
 
+    // Verifica se os usuários representam a mesma conta (mesmo e-mail ou username)
+    const userCheck = await query('SELECT email, username FROM users WHERE id = $1', [userId]);
+    const targetCheck = await query('SELECT email, username FROM users WHERE id = $2', [targetId]);
+    if (userCheck.rows[0] && targetCheck.rows[0]) {
+      const u1 = userCheck.rows[0];
+      const u2 = targetCheck.rows[0];
+      if (
+        (u1.email && u2.email && u1.email.toLowerCase() === u2.email.toLowerCase()) ||
+        (u1.username && u2.username && u1.username.toLowerCase() === u2.username.toLowerCase())
+      ) {
+        return c.json({ error: 'Você não pode enviar solicitação de amizade para si mesmo.' }, 400);
+      }
+    }
+
     // Verifica se já existe relação em qualquer sentido
     const existing = await query(
       `SELECT id, user_id, friend_id, status FROM friendships

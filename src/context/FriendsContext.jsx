@@ -126,8 +126,16 @@ export function FriendsProvider({ children }) {
     (query = '') => {
       const q = query.trim().toLowerCase();
       const currentList = allUsers.length > 0 ? allUsers : getAllUsersSync();
+      const myEmail = currentUser?.email?.toLowerCase();
+      const myUsername = currentUser?.username?.toLowerCase();
+
       return currentList
-        .filter((u) => u.id !== myId)
+        .filter((u) => {
+          if (u.id === myId) return false;
+          if (myEmail && u.email && u.email.toLowerCase() === myEmail) return false;
+          if (myUsername && u.username && u.username.toLowerCase() === myUsername) return false;
+          return true;
+        })
         .filter((u) => {
           if (!q) return true;
           const matchUsername = u.username && u.username.toLowerCase().includes(q);
@@ -136,13 +144,24 @@ export function FriendsProvider({ children }) {
           return matchUsername || matchName || matchEmail;
         });
     },
-    [allUsers, myId]
+    [allUsers, myId, currentUser]
   );
 
   const sendFriendRequest = useCallback(
     async (targetId) => {
       if (!myId) return { success: false, message: 'Você precisa estar conectado em uma conta.' };
       if (myId === targetId) return { success: false, message: 'Você não pode adicionar seu próprio perfil.' };
+
+      const allList = allUsers.length > 0 ? allUsers : getAllUsersSync();
+      const targetUser = allList.find((u) => u.id === targetId);
+      if (targetUser) {
+        if (currentUser?.email && targetUser.email && targetUser.email.toLowerCase() === currentUser.email.toLowerCase()) {
+          return { success: false, message: 'Você não pode adicionar seu próprio perfil.' };
+        }
+        if (currentUser?.username && targetUser.username && targetUser.username.toLowerCase() === currentUser.username.toLowerCase()) {
+          return { success: false, message: 'Você não pode adicionar seu próprio perfil.' };
+        }
+      }
 
       // Executa lógica no dataService
       const serviceRes = await requestFriendship(myId, targetId);
@@ -168,7 +187,7 @@ export function FriendsProvider({ children }) {
 
       return serviceRes;
     },
-    [myId]
+    [myId, allUsers, currentUser]
   );
 
   const cancelFriendRequest = useCallback(

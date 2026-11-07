@@ -129,16 +129,18 @@ export function AuthProvider({ children }) {
       }
 
       // Persiste no backend / dataService
-      await saveUserRecord(user);
+      const saveRes = await saveUserRecord(user);
+      const authToken = saveRes.user?.token || user.token || null;
 
       const sessionData = {
-        id: user.id,
+        id: saveRes.user?.id || user.id,
         username: user.username || syntheticUsername,
         email: user.email,
         name: user.name,
         avatar: user.avatar || null,
         role: user.role || 'Guerreiro Google',
         provider: 'google',
+        token: authToken,
       };
 
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
@@ -263,15 +265,16 @@ export function AuthProvider({ children }) {
     const updatedUsers = [...users, newUser];
     try {
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updatedUsers));
-      await saveUserRecord(newUser);
+      const regRes = await saveUserRecord(newUser);
 
       const sessionData = {
-        id: newUser.id,
+        id: regRes.user?.id || newUser.id,
         username: newUser.username,
         name: newUser.name,
         email: newUser.email,
         avatar: newUser.avatar,
         role: newUser.role,
+        token: regRes.user?.token || null,
       };
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
       setCurrentUser(sessionData);
@@ -281,20 +284,77 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const login = (nicknameOrEmail, password, remember = true) => {
-    const cleanInput = (nicknameOrEmail || '').trim().toLowerCase();
+  const login = async (nicknameOrEmail, password, remember = true) => {
+    const cleanInput = (nicknameOrEmail || '').trim();
     const cleanPassword = (password || '').trim();
 
     if (!cleanInput || !cleanPassword) {
       return { success: false, message: 'Por favor, informe seu nickname e senha.' };
     }
 
+    // 1. Tenta autenticar na API Neon Functions (PostgreSQL)
+    try {
+      const apiBase = DB_CONFIG.apiUrl || 'http://localhost:3001/api';
+      const isEmail = cleanInput.includes('@');
+      const res = await fetch(`${apiBase}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: isEmail ? cleanInput : undefined,
+          username: !isEmail ? cleanInput : undefined,
+          password: cleanPassword,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          const sessionData = {
+            id: data.user.id,
+            username: data.user.username || data.user.name,
+            name: data.user.name || data.user.username,
+            email: data.user.email,
+            avatar: data.user.avatar || null,
+            role: data.user.role || 'Guerreiro',
+            provider: data.user.provider || 'local',
+            token: data.token || null,
+          };
+
+          if (remember) {
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+          }
+
+          // Atualiza cache local de usuários com a senha para fallback offline
+          const users = getUsers();
+          const nextUsers = users.filter(
+            (u) => u.id !== sessionData.id && u.email?.toLowerCase() !== sessionData.email?.toLowerCase()
+          );
+          nextUsers.push({ ...sessionData, password: cleanPassword });
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(nextUsers));
+
+          setCurrentUser(sessionData);
+          return {
+            success: true,
+            message: `Login realizado com sucesso! Bem-vindo de volta, ${sessionData.name}.`,
+            user: sessionData,
+          };
+        }
+      } else if (res.status === 401) {
+        const errData = await res.json().catch(() => null);
+        return { success: false, message: errData?.error || 'Senha incorreta.' };
+      }
+    } catch {
+      // API offline: segue para autenticação local
+    }
+
+    // 2. Fallback para banco local
     const users = getUsers();
+    const cleanLower = cleanInput.toLowerCase();
     const user = users.find(
       (u) =>
-        ((u.username && u.username.toLowerCase() === cleanInput) ||
-          (u.name && u.name.toLowerCase() === cleanInput) ||
-          (u.email && u.email.toLowerCase() === cleanInput)) &&
+        ((u.username && u.username.toLowerCase() === cleanLower) ||
+          (u.name && u.name.toLowerCase() === cleanLower) ||
+          (u.email && u.email.toLowerCase() === cleanLower)) &&
         u.password === cleanPassword
     );
 
@@ -309,6 +369,7 @@ export function AuthProvider({ children }) {
       email: user.email,
       avatar: user.avatar || null,
       role: user.role || 'Guerreiro do arquivo',
+      provider: user.provider || 'local',
     };
 
     if (remember) {

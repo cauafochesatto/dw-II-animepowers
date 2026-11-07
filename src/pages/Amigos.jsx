@@ -12,7 +12,6 @@ import {
   Close,
   Swords,
   ArrowRight,
-  AlertTriangle,
   Plus,
 } from '../components/Icons';
 import '../styles/friends.css';
@@ -883,29 +882,6 @@ export default function Amigos() {
 
       <div className="game-shell">
         <GameSubNav />
-
-        {/* Informação arquitetural e de persistência local */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.8rem',
-            padding: '1rem 1.2rem',
-            background: 'var(--surface-1)',
-            border: '1px solid var(--line)',
-            borderRadius: 'var(--r-md)',
-            marginBottom: '2rem',
-            fontSize: '0.85rem',
-            color: 'var(--text-2)',
-            lineHeight: 1.5,
-          }}
-        >
-          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--signal)' }} />
-          <div>
-            <strong>Armazenamento Local:</strong> Os perfis, amizades e desafios são salvos no armazenamento local deste
-            navegador. Você pode alternar entre contas cadastradas na aba de login para enviar e aceitar desafios entre perfis.
-          </div>
-        </div>
 
         <nav className="fr-nav" aria-label="Abas da comunidade" role="tablist">
           {TABS.map((tab) => {

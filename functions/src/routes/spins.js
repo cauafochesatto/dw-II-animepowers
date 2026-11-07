@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { query } from '../db.js';
+import { getAuthenticatedUser } from '../authHelper.js';
 
 export const spinsRouter = new Hono();
 
@@ -26,12 +27,18 @@ spinsRouter.get('/:userId', async (c) => {
 // Consumo atômico e validado de giros
 spinsRouter.post('/consume', async (c) => {
   try {
+    const authUser = getAuthenticatedUser(c);
     const body = await c.req.json();
     const { userId, count = 1 } = body;
 
+    const effectiveUserId = authUser ? authUser.uid : userId;
+    if (authUser && userId && userId !== authUser.uid) {
+      return c.json({ error: 'Acesso negado: você não pode consumir giros de outra conta.', code: 'FORBIDDEN' }, 403);
+    }
+
     const spinsToDeduct = Math.max(1, parseInt(count, 10) || 1);
 
-    if (!userId) {
+    if (!effectiveUserId) {
       return c.json({ error: 'Identificador do jogador ausente.' }, 400);
     }
 
@@ -42,7 +49,7 @@ spinsRouter.post('/consume', async (c) => {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2 AND spins_balance >= $1
        RETURNING spins_balance`,
-      [spinsToDeduct, userId]
+      [spinsToDeduct, effectiveUserId]
     );
 
     if (res.rows.length === 0) {

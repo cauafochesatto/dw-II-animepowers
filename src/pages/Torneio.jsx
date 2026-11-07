@@ -13,14 +13,14 @@ import {
 import { resolvePowerImage } from '../utils/imageHelper';
 import GameSubNav from '../components/GameSubNav';
 import { Swords, Check, Close } from '../components/Icons';
-import { saveTournamentRecord, resolveTournamentMatchServer } from '../services/dataService';
+import { saveTournamentRecord, resolveTournamentVictoryServer } from '../services/dataService';
 import '../styles/tournament.css';
 import '../styles/game.css';
 
 const STORAGE_KEY = 'ap:active_tournament';
 
 export default function Torneio() {
-  const { activeBuild, recordBattleResult } = useCharacterGame();
+  const { activeBuild, recordBattleResult, syncSpinsFromServer } = useCharacterGame();
   const { friendIds, getUserById, getUserBuild } = useFriends();
   const { currentUser } = useAuth();
   const userTournamentKey = currentUser?.id ? `ap:${currentUser.id}:active_tournament` : 'ap:guest:active_tournament';
@@ -44,6 +44,8 @@ export default function Torneio() {
   const [activeMatch, setActiveMatch] = useState(null); // Confronto aberto em modal
   const [simulatingAll, setSimulatingAll] = useState(false);
   const [tournamentNotice, setTournamentNotice] = useState(null);
+  const [claimingReward, setClaimingReward] = useState(false);
+  const [claimFailed, setClaimFailed] = useState(false);
 
   // Sincroniza persistência do torneio isolada por usuário
   useEffect(() => {
@@ -83,14 +85,18 @@ export default function Torneio() {
 
   function handleStartNewTournament() {
     const friendsToInclude = availableFriends.filter((f) => selectedFriendIds.includes(f.id));
+    const userBuildWithId = includeUser ? { ...activeBuild, userId: currentUser?.id } : null;
     const newTourn = createTournament(
       customName,
       size,
       friendsToInclude,
-      includeUser ? activeBuild : null,
+      userBuildWithId,
       difficulty
     );
+    newTourn.user_id = currentUser?.id;
+    newTourn.userId = currentUser?.id;
     setTournament(newTourn);
+    setClaimFailed(false);
   }
 
   function handleResetTournament() {
@@ -105,44 +111,137 @@ export default function Torneio() {
     setActiveMatch(match);
   }
 
-  const handleResolveMatch = useCallback((matchId) => {
-    if (!tournament) return;
-    const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
-    const updated = resolveTournamentMatch(tournament, matchId);
-    setTournament({ ...updated });
-    setActiveMatch(null);
+  const checkAndAwardTournamentChampion = useCallback(
+    (updatedTournament) => {
+      if (!updatedTournament || updatedTournament.status !== 'completed' || !updatedTournament.champion) {
+        return;
+      }
 
-    // Validação online no Neon e concessão de giros proporcionais à dificuldade
-    if (match && currentUser?.id) {
-      const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
-      const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
-      if (isUser1 || isUser2) {
-        const userFighter = isUser1 ? match.fighter1 : match.fighter2;
-        const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
+      // Apenas usuários autenticados podem receber recompensas de torneio
+      if (!currentUser?.id) {
+        setTournamentNotice('⚠️ Faça login para salvar seu torneio e receber giros de recompensa do campeonato.');
+        return;
+      }
 
-        resolveTournamentMatchServer({
+      const champ = updatedTournament.champion;
+      // Apenas o campeão humano (não IA) que seja o build ativo do usuário recebe recompensa
+      const isUserChampion = champ && !champ.isAi && (champ.name === activeBuild?.name || champ.userId === currentUser.id);
+
+      if (isUserChampion && !updatedTournament.rewardClaimed) {
+        if (claimingReward) return;
+
+        setClaimingReward(true);
+        setClaimFailed(false);
+        const tournDiff = updatedTournament.difficulty || difficulty;
+
+        // IMPORTANTE: Não marca rewardClaimed = true antes da confirmação da API,
+        // garantindo que o jogador possa tentar novamente caso ocorra falha de rede.
+        resolveTournamentVictoryServer({
           userId: currentUser.id,
-          matchId: `${tournament.id}_${matchId}`,
-          tournamentId: tournament.id,
-          playerBuild: userFighter,
-          opponentBuild: opponentFighter,
-          difficulty: tournament.difficulty || difficulty,
-        }).then((res) => {
-          if (res?.spinsAwarded > 0) {
-            setTournamentNotice(res.message || `🏆 Vitória no Torneio! +${res.spinsAwarded} Giros creditados!`);
+          tournamentId: updatedTournament.id,
+          tournament: updatedTournament,
+          playerBuild: activeBuild,
+          token: currentUser.token || null,
+        })
+          .then((res) => {
+            setClaimingReward(false);
+
+            if (!res?.success) {
+              // API retornou erro explícito (403, 401, etc.) - não credita e permite tentar novamente
+              setClaimFailed(true);
+              const errorMsg = res?.error || 'Erro ao validar vitória no servidor. Nenhum giro foi creditado.';
+              setTournamentNotice(`⚠️ ${errorMsg}`);
+              return;
+            }
+
+            if (res.alreadyProcessed) {
+              // Recompensa já foi creditada anteriormente — marca como concluído e sincroniza saldo
+              updatedTournament.rewardClaimed = true;
+              setTournament({ ...updatedTournament });
+              setClaimFailed(false);
+              setTournamentNotice('A recompensa deste torneio já foi creditada anteriormente.');
+              if (typeof res.currentSpins === 'number') {
+                syncSpinsFromServer(res.currentSpins);
+              }
+              return;
+            }
+
+            // Sucesso confirmado pelo servidor Neon!
+            updatedTournament.rewardClaimed = true;
+            setTournament({ ...updatedTournament });
+            setClaimFailed(false);
+
+            const spinsAwarded = res.spinsAwarded ?? 0;
+            if (spinsAwarded > 0 && typeof res.newBalance === 'number') {
+              // Atualiza saldo exclusivamente com o valor confirmado retornado pelo servidor
+              syncSpinsFromServer(res.newBalance);
+            }
+
+            setTournamentNotice(
+              res.message ||
+                `🏆 CAMPEÃO DO TORNEIO (${tournDiff.toUpperCase()})! +${spinsAwarded} Giros creditados pelo servidor!`
+            );
             recordBattleResult({
               mode: 'Torneio',
-              isPlayerWinner: res.isPlayerWinner,
-              rewardSpins: res.spinsAwarded,
-              spinsAwarded: res.spinsAwarded,
-              opponentName: opponentFighter.name,
-              opponentAvatar: opponentFighter.avatar,
+              isPlayerWinner: true,
+              spinsAwarded: 0, // Não duplica saldo localmente
+              rewardSpins: spinsAwarded,
+              opponentName: 'Grande Final do Torneio',
+              opponentAvatar: resolvePowerImage('/imagenspoderes/kamehamenha.jpg'),
+            });
+          })
+          .catch(() => {
+            // Falha de rede ou API indisponível — NÃO marca rewardClaimed = true, permitindo retry
+            setClaimingReward(false);
+            setClaimFailed(true);
+            setTournamentNotice(
+              '⚠️ Não foi possível confirmar a vitória com o servidor. Nenhum giro foi creditado. Clique em "Tentar Novamente".'
+            );
+          });
+      }
+    },
+    [activeBuild, difficulty, currentUser, claimingReward, syncSpinsFromServer, recordBattleResult]
+  );
+
+  const handleResolveMatch = useCallback(
+    (matchId) => {
+      if (!tournament) return;
+      const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
+      const updated = resolveTournamentMatch(tournament, matchId);
+      setTournament({ ...updated });
+      setActiveMatch(null);
+
+      // Se a partida envolvia o jogador e ele perdeu, registra derrota (sem giros)
+      if (match) {
+        const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
+        const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
+        if (isUser1 || isUser2) {
+          const userFighter = isUser1 ? match.fighter1 : match.fighter2;
+          const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
+
+          // Localiza a partida atualizada
+          const resolvedMatch = updated.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
+          const isPlayerWinner = resolvedMatch?.winner?.name === userFighter?.name;
+
+          if (!isPlayerWinner) {
+            setTournamentNotice('Você foi eliminado desta edição do Torneio. Tente novamente na próxima temporada!');
+            recordBattleResult({
+              mode: 'Torneio',
+              isPlayerWinner: false,
+              spinsAwarded: 0,
+              rewardSpins: 0,
+              opponentName: opponentFighter?.name || 'Rival do Torneio',
+              opponentAvatar: resolvePowerImage(opponentFighter?.avatar),
             });
           }
-        }).catch(() => {});
+        }
       }
-    }
-  }, [tournament, currentUser, activeBuild, difficulty, recordBattleResult]);
+
+      // Se o torneio foi concluído, verifica se o jogador é o campeão para creditar a premiação
+      checkAndAwardTournamentChampion(updated);
+    },
+    [tournament, activeBuild, recordBattleResult, checkAndAwardTournamentChampion]
+  );
 
   function handleSimulateAll() {
     if (!tournament) return;
@@ -151,6 +250,7 @@ export default function Torneio() {
       const updated = autoSimulateTournament(tournament);
       setTournament({ ...updated });
       setSimulatingAll(false);
+      checkAndAwardTournamentChampion(updated);
     }, 400);
   }
 
@@ -174,27 +274,40 @@ export default function Torneio() {
           <div
             style={{
               padding: '1rem 1.2rem',
-              background: 'rgba(16, 185, 129, 0.18)',
-              border: '1px solid #10b981',
+              background: claimFailed ? 'rgba(239, 68, 68, 0.18)' : 'rgba(16, 185, 129, 0.18)',
+              border: claimFailed ? '1px solid #ef4444' : '1px solid #10b981',
               borderRadius: 'var(--r-md)',
               marginBottom: '1.5rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '0.8rem',
-              color: '#6ee7b7',
+              color: claimFailed ? '#fca5a5' : '#6ee7b7',
               fontWeight: 700,
             }}
           >
             <div>{tournamentNotice}</div>
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => setTournamentNotice(null)}
-              style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
-            >
-              Fechar
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              {claimFailed && tournament?.status === 'completed' && !tournament?.rewardClaimed && (
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={() => checkAndAwardTournamentChampion(tournament)}
+                  disabled={claimingReward}
+                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}
+                >
+                  {claimingReward ? 'Reivindicando...' : '🔄 Tentar Novamente'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setTournamentNotice(null)}
+                style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         )}
 
@@ -398,6 +511,19 @@ export default function Torneio() {
                   Conquistou a vitória invicta em todas as fases da chave com a técnica{' '}
                   <strong style={{ color: 'var(--signal)' }}>"{tournament.champion.signatureMove}"</strong>!
                 </p>
+                {!tournament.rewardClaimed && !tournament.champion?.isAi && (
+                  <div style={{ marginBottom: '1.2rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--lg"
+                      onClick={() => checkAndAwardTournamentChampion(tournament)}
+                      disabled={claimingReward}
+                      style={{ padding: '0.8rem 1.8rem', fontWeight: 800 }}
+                    >
+                      {claimingReward ? 'Reivindicando Giros...' : '🏆 Reivindicar Giros no Servidor'}
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   className="btn btn--lg"

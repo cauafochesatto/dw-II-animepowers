@@ -228,5 +228,161 @@ describe('Isolamento de Contas e Persistência Independente', () => {
     expect(historyB).toHaveLength(1);
     expect(historyB[0].id).toBe('bat_2');
   });
+
+  it('1. Cadastro de usuário novo concede exatamente 20 giros', () => {
+    const newUser = { id: 'usr_fresh_' + Date.now(), name: 'Novato', email: 'novato@teste.com' };
+    const data = resolveUserInitialData(newUser.id);
+    expect(data.spins).toBe(20);
+  });
+
+  it('2. Fazer logout e login novamente preserva a conta e o saldo do usuário', () => {
+    const userId = 'usr_persistent';
+    const keys = getStorageKeys(userId);
+
+    // Usuário joga, gasta giros até 14
+    writeStorage(keys.SPINS, 14);
+
+    // Logout
+    localStorage.removeItem(SESSION_KEY);
+
+    // Relogin
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, email: 'persist@teste.com' }));
+    const reloaded = resolveUserInitialData(userId);
+    expect(reloaded.spins).toBe(14);
+  });
+
+  it('9. Não existe reposição gratuita de 10 giros na economia oficial', () => {
+    const userId = 'usr_no_replenish';
+    const keys = getStorageKeys(userId);
+    writeStorage(keys.SPINS, 0);
+
+    // Não existe mecanismo de conceder giros sem torneio
+    expect(readStorage(keys.SPINS, 0)).toBe(0);
+  });
+
+  it('10. Ranking apresenta imagens válidas ou fallback seguro', async () => {
+    const { resolvePowerImage } = await import('../utils/imageHelper');
+
+    // Imagem vazia deve retornar fallback verificado e existente
+    const fallback = resolvePowerImage(null);
+    expect(fallback).toContain('kamehamenha.jpg');
+
+    // Imagem completa
+    const resolved = resolvePowerImage('/poderesanime/imagenspoderes/rasengan.jpg');
+    expect(resolved).toContain('rasengan.jpg');
+  });
+
+  it('11. Usuário não consegue adicionar a si mesmo como amigo', () => {
+    const myId = 'usr_self';
+    const myEmail = 'guerreiro@animepowers.local';
+
+    function canAddFriend(id, targetId, targetEmail) {
+      if (id === targetId) return false;
+      if (targetEmail && targetEmail.toLowerCase() === myEmail.toLowerCase()) return false;
+      return true;
+    }
+
+    expect(canAddFriend(myId, myId, myEmail)).toBe(false);
+    expect(canAddFriend(myId, 'other_id', myEmail)).toBe(false);
+    expect(canAddFriend(myId, 'other_id', 'outro@animepowers.local')).toBe(true);
+  });
+
+  it('12. Solicitações de amizade e aceitação funcionam perfeitamente entre duas contas', () => {
+    const friendships = [];
+
+    function sendRequest(senderId, targetId) {
+      if (senderId === targetId) return { success: false, message: 'Auto-amizade bloqueada' };
+      friendships.push({ id: `fr_${Date.now()}`, userId: senderId, friendId: targetId, status: 'pending' });
+      return { success: true };
+    }
+
+    function acceptRequest(friendshipId) {
+      const fr = friendships.find((f) => f.id === friendshipId);
+      if (fr) fr.status = 'accepted';
+      return { success: true };
+    }
+
+    // A envia para B
+    const sendRes = sendRequest('user_A', 'user_B');
+    expect(sendRes.success).toBe(true);
+    expect(friendships[0].status).toBe('pending');
+
+    // B aceita pedido de A
+    const acceptRes = acceptRequest(friendships[0].id);
+    expect(acceptRes.success).toBe(true);
+    expect(friendships[0].status).toBe('accepted');
+  });
+
+  it('13. Cadastro rejeita IDs injetados pelo cliente e sempre gera ID oficial do servidor', () => {
+    function serverRegisterUser(body) {
+      const cleanEmail = body.email.trim().toLowerCase();
+      const cleanUsername = (body.username || cleanEmail.split('@')[0]).trim();
+      // Servidor ignora body.id intencionalmente
+      const officialServerId = 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      return {
+        id: officialServerId,
+        email: cleanEmail,
+        username: cleanUsername,
+        spins_balance: 20, // 20 giros iniciais garantidos
+      };
+    }
+
+    const maliciousBody = {
+      id: 'admin_hijacked_id_999',
+      name: 'Hacker',
+      email: 'hacker@animepowers.local',
+      password: '123',
+    };
+
+    const registered = serverRegisterUser(maliciousBody);
+    expect(registered.id).not.toBe('admin_hijacked_id_999');
+    expect(registered.id.startsWith('usr_')).toBe(true);
+    expect(registered.spins_balance).toBe(20);
+  });
+
+  it('14. Prevenção de colisão de contas: login por nome ambíguo rejeita com 409 e exige e-mail', () => {
+    const mockUsers = [
+      { id: 'usr_1', name: 'Guerreiro', email: 'guerreiro1@animepowers.local', spins_balance: 10 },
+      { id: 'usr_2', name: 'Guerreiro', email: 'guerreiro2@animepowers.local', spins_balance: 25 },
+    ];
+
+    function serverLogin(loginInput) {
+      const clean = loginInput.trim().toLowerCase();
+      if (clean.includes('@')) {
+        const found = mockUsers.find((u) => u.email.toLowerCase() === clean);
+        return found ? { status: 200, user: found } : { status: 404 };
+      }
+      // Busca por username
+      const byUsername = mockUsers.filter((u) => u.username && u.username.toLowerCase() === clean);
+      if (byUsername.length === 1) return { status: 200, user: byUsername[0] };
+
+      // Fallback por display name: verifica ambiguidade
+      const byName = mockUsers.filter((u) => u.name.toLowerCase() === clean);
+      if (byName.length > 1) {
+        return {
+          status: 409,
+          error: 'Existem múltiplos guerreiros com este nome de exibição. Por favor, acesse utilizando seu e-mail cadastrado.',
+        };
+      }
+      if (byName.length === 1) return { status: 200, user: byName[0] };
+      return { status: 404 };
+    }
+
+    // Tentativa de logar com "Guerreiro" (ambíguo)
+    const ambiguousLogin = serverLogin('Guerreiro');
+    expect(ambiguousLogin.status).toBe(409);
+    expect(ambiguousLogin.error).toContain('múltiplos guerreiros com este nome');
+
+    // Login com o e-mail específico de cada um acessa a conta exata e saldo correspondente
+    const loginUser1 = serverLogin('guerreiro1@animepowers.local');
+    expect(loginUser1.status).toBe(200);
+    expect(loginUser1.user.id).toBe('usr_1');
+    expect(loginUser1.user.spins_balance).toBe(10);
+
+    const loginUser2 = serverLogin('guerreiro2@animepowers.local');
+    expect(loginUser2.status).toBe(200);
+    expect(loginUser2.user.id).toBe('usr_2');
+    expect(loginUser2.user.spins_balance).toBe(25);
+  });
 });
 

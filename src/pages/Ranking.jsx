@@ -2,10 +2,26 @@ import { useState, useEffect, useMemo } from 'react';
 import { useCharacterGame } from '../context/useCharacterGame';
 import { useAuth } from '../context/useAuth';
 import { resolvePowerImage } from '../utils/imageHelper';
+import { CHARACTERS } from '../data/characters';
 import GameSubNav from '../components/GameSubNav';
 import { AlertTriangle } from '../components/Icons';
 import { fetchRankingOnline } from '../services/dataService';
 import '../styles/game.css';
+
+function resolveRankingAvatar(entry) {
+  if (entry?.avatar && typeof entry.avatar === 'string' && entry.avatar.trim()) {
+    return resolvePowerImage(entry.avatar);
+  }
+  // Se o nome do combatente incluir o nome de algum personagem oficial
+  const nameLower = (entry?.name || '').toLowerCase();
+  const matched = CHARACTERS.find((c) =>
+    nameLower.includes(c.nome.toLowerCase()) || nameLower.includes(c.id.toLowerCase())
+  );
+  if (matched?.imagem) {
+    return resolvePowerImage(matched.imagem);
+  }
+  return resolvePowerImage('/imagenspoderes/kamehamenha.jpg');
+}
 
 export default function Ranking() {
   const { activeBuild, battleStats, battleHistory } = useCharacterGame();
@@ -217,11 +233,12 @@ export default function Ranking() {
                     <td>
                       <div className="fighter-cell">
                         <img
-                          src={resolvePowerImage(entry.avatar)}
+                          src={resolveRankingAvatar(entry)}
                           alt={entry.name}
                           className="fighter-cell__avatar"
                           onError={(e) => {
-                            e.currentTarget.src = '/poderesanime/imagenspoderes/kamehamenha.jpg';
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = resolvePowerImage('/imagenspoderes/kamehamenha.jpg');
                           }}
                         />
                         <div>

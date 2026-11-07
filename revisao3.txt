@@ -1,0 +1,333 @@
+﻿diff --git a/functions/src/battleEngine.js b/functions/src/battleEngine.js
+index bccc98e..c5b090d 100644
+--- a/functions/src/battleEngine.js
++++ b/functions/src/battleEngine.js
+@@ -27,7 +27,7 @@ export function createFighterState(build, fighterName = 'Jogador', isAi = false,
+     2500
+   );
+ 
+-  const avatar = build?.avatar || build?.imagem || '/poderesanime/imagenspoderes/kamehamenha.jpg';
++  const avatar = build?.avatar || build?.imagem || '/imagenspoderes/kamehamenha.jpg';
+   const customName = build?.name || fighterName;
+   const signatureMove = build?.signatureMove || 'Golpe C├│smico Devastador';
+   const startingEnergy = clamp(Math.round(15 + sanitizedStats.energia * 0.35), 15, 60);
+@@ -267,20 +267,126 @@ export function scaleFighterStats(build, difficulty = 'medio') {
+ }
+ 
+ /**
+- * Recompensas oficiais em giros:
+- * - Arena Vit├│ria: 2 giros
+- * - Torneio F├ícil: 3 giros por vit├│ria
+- * - Torneio M├®dio: 5 giros por vit├│ria
+- * - Torneio Dif├¡cil: 8 giros por vit├│ria
++ * Retorna os giros concedidos oficialmente pelo backend
++ * Regras estritas:
++ * - Arena: 0 giros (independente de vit├│ria/derrota)
++ * - Torneio F├ícil: +3 giros (se vit├│ria)
++ * - Torneio M├®dio: +5 giros (se vit├│ria)
++ * - Torneio Dif├¡cil: +8 giros (se vit├│ria)
++ * - Qualquer derrota: 0 giros
+  */
+-export function getRewardSpins(source, difficulty = null, isWin = true) {
++export function getRewardSpins(mode = 'tournament', difficulty = 'medio', isWin = true) {
+   if (!isWin) return 0;
+-  if (source === 'arena') return 2;
+-  if (source === 'tournament') {
+-    if (difficulty === 'facil') return 3;
+-    if (difficulty === 'dificil') return 8;
+-    return 5; // medio
++  if (mode === 'arena') return 0;
++  if (mode === 'tournament') {
++    switch (difficulty) {
++      case 'facil': return 3;
++      case 'dificil': return 8;
++      case 'medio':
++      default:
++        return 5;
++    }
+   }
+   return 0;
+ }
+ 
++/**
++ * Valida├º├úo rigorosa e segura da conclus├úo do Torneio no backend.
++ * O servidor N├âO confia em flags booleanas (`isPlayerWinner`) enviadas pelo cliente.
++ * Analisa a integridade de todas as fases, rodadas, confrontos e Grande Final
++ * para comprovar se o jogador humano foi o verdadeiro campe├úo invicto.
++ */
++export function validateTournamentChampion(tournament, _userId = null) {
++  if (!tournament || typeof tournament !== 'object') {
++    return { isValid: false, reason: 'Objeto de torneio ausente ou inv├ílido.' };
++  }
++
++  // 1. Identificador e status
++  if (!tournament.id || typeof tournament.id !== 'string') {
++    return { isValid: false, reason: 'ID do torneio ausente ou inv├ílido.' };
++  }
++
++  if (tournament.status !== 'completed') {
++    return { isValid: false, reason: 'O torneio ainda n├úo foi conclu├¡do.' };
++  }
++
++  // 2. Dificuldade e tamanho
++  const validDifficulties = ['facil', 'medio', 'dificil'];
++  if (!validDifficulties.includes(tournament.difficulty)) {
++    return { isValid: false, reason: 'Dificuldade de torneio inv├ílida.' };
++  }
++
++  const validSizes = [4, 8, 16];
++  if (!validSizes.includes(Number(tournament.size))) {
++    return { isValid: false, reason: 'Tamanho de chave de torneio inv├ílido.' };
++  }
++
++  // 3. Rodadas esperadas
++  const expectedTotalRounds = Math.log2(Number(tournament.size));
++  if (!Array.isArray(tournament.rounds) || tournament.rounds.length !== expectedTotalRounds) {
++    return { isValid: false, reason: 'Estrutura de rodadas do torneio corrompida.' };
++  }
++
++  // 4. Participantes e identifica├º├úo do jogador humano
++  if (!Array.isArray(tournament.participants) || tournament.participants.length !== Number(tournament.size)) {
++    return { isValid: false, reason: 'N├║mero de participantes inv├ílido.' };
++  }
++
++  const playerParticipant = tournament.participants.find((p) => p && !p.isAi);
++  if (!playerParticipant) {
++    return { isValid: false, reason: 'Nenhum combatente humano participante encontrado no torneio.' };
++  }
++
++  const playerName = playerParticipant.name;
++
++  // 5. Valida├º├úo do Campe├úo declarado
++  if (!tournament.champion || typeof tournament.champion !== 'object') {
++    return { isValid: false, reason: 'Nenhum campe├úo foi coroado no torneio.' };
++  }
++
++  if (tournament.champion.isAi || tournament.champion.name !== playerName) {
++    return { isValid: false, reason: 'O jogador n├úo foi o campe├úo deste torneio.' };
++  }
++
++  // 6. Valida├º├úo da Grande Final
++  const finalRound = tournament.rounds[tournament.rounds.length - 1];
++  if (!finalRound || !Array.isArray(finalRound.matches) || finalRound.matches.length !== 1) {
++    return { isValid: false, reason: 'Confronto final n├úo encontrado na ├║ltima rodada.' };
++  }
++
++  const finalMatch = finalRound.matches[0];
++  if (finalMatch.status !== 'completed') {
++    return { isValid: false, reason: 'A Grande Final n├úo foi conclu├¡da.' };
++  }
++
++  if (!finalMatch.winner || finalMatch.winner.isAi || finalMatch.winner.name !== playerName) {
++    return { isValid: false, reason: 'O vencedor da Grande Final n├úo ├® o jogador.' };
++  }
++
++  // 7. Valida├º├úo da trilha de vit├│rias (o jogador deve ter vencido o confronto em cada rodada)
++  for (const round of tournament.rounds) {
++    const playerMatch = round.matches.find(
++      (m) =>
++        m.status === 'completed' &&
++        ((m.fighter1 && m.fighter1.name === playerName) || (m.fighter2 && m.fighter2.name === playerName))
++    );
++
++    if (!playerMatch) {
++      return { isValid: false, reason: `O jogador n├úo participou de confronto v├ílido na fase: ${round.name}.` };
++    }
++
++    if (!playerMatch.winner || playerMatch.winner.name !== playerName) {
++      return { isValid: false, reason: `O jogador foi derrotado na fase: ${round.name}.` };
++    }
++  }
++
++  // Vit├│ria leg├¡tima comprovada
++  const spins = getRewardSpins('tournament', tournament.difficulty, true);
++  return {
++    isValid: true,
++    difficulty: tournament.difficulty,
++    rewardSpins: spins,
++    playerName,
++  };
++}
++
+diff --git a/src/pages/Torneio.jsx b/src/pages/Torneio.jsx
+index cdbd501..e50887c 100644
+--- a/src/pages/Torneio.jsx
++++ b/src/pages/Torneio.jsx
+@@ -13,14 +13,14 @@ import {
+ import { resolvePowerImage } from '../utils/imageHelper';
+ import GameSubNav from '../components/GameSubNav';
+ import { Swords, Check, Close } from '../components/Icons';
+-import { saveTournamentRecord, resolveTournamentMatchServer } from '../services/dataService';
++import { saveTournamentRecord, resolveTournamentVictoryServer } from '../services/dataService';
+ import '../styles/tournament.css';
+ import '../styles/game.css';
+ 
+ const STORAGE_KEY = 'ap:active_tournament';
+ 
+ export default function Torneio() {
+-  const { activeBuild, recordBattleResult } = useCharacterGame();
++  const { activeBuild, recordBattleResult, creditSpins } = useCharacterGame();
+   const { friendIds, getUserById, getUserBuild } = useFriends();
+   const { currentUser } = useAuth();
+   const userTournamentKey = currentUser?.id ? `ap:${currentUser.id}:active_tournament` : 'ap:guest:active_tournament';
+@@ -105,44 +105,119 @@ export default function Torneio() {
+     setActiveMatch(match);
+   }
+ 
+-  const handleResolveMatch = useCallback((matchId) => {
+-    if (!tournament) return;
+-    const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
+-    const updated = resolveTournamentMatch(tournament, matchId);
+-    setTournament({ ...updated });
+-    setActiveMatch(null);
+-
+-    // Valida├º├úo online no Neon e concess├úo de giros proporcionais ├á dificuldade
+-    if (match && currentUser?.id) {
+-      const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
+-      const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
+-      if (isUser1 || isUser2) {
+-        const userFighter = isUser1 ? match.fighter1 : match.fighter2;
+-        const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
+-
+-        resolveTournamentMatchServer({
+-          userId: currentUser.id,
+-          matchId: `${tournament.id}_${matchId}`,
+-          tournamentId: tournament.id,
+-          playerBuild: userFighter,
+-          opponentBuild: opponentFighter,
+-          difficulty: tournament.difficulty || difficulty,
+-        }).then((res) => {
+-          if (res?.spinsAwarded > 0) {
+-            setTournamentNotice(res.message || `­ƒÅå Vit├│ria no Torneio! +${res.spinsAwarded} Giros creditados!`);
++  const checkAndAwardTournamentChampion = useCallback(
++    (updatedTournament) => {
++      if (!updatedTournament || updatedTournament.status !== 'completed' || !updatedTournament.champion) {
++        return;
++      }
++
++      const champ = updatedTournament.champion;
++      const isUserChampion = champ && (champ.name === activeBuild?.name || !champ.isAi);
++
++      if (isUserChampion && !updatedTournament.rewardClaimed) {
++        updatedTournament.rewardClaimed = true;
++        const tournDiff = updatedTournament.difficulty || difficulty;
++        const expectedSpins = tournDiff === 'facil' ? 3 : tournDiff === 'dificil' ? 8 : 5;
++
++        if (currentUser?.id) {
++          resolveTournamentVictoryServer({
++            userId: currentUser.id,
++            tournamentId: updatedTournament.id,
++            tournament: updatedTournament,
++            difficulty: tournDiff,
++            playerBuild: activeBuild,
++            isPlayerWinner: true,
++          })
++            .then((res) => {
++              const spinsAwarded = res?.spinsAwarded ?? expectedSpins;
++              if (spinsAwarded > 0) {
++                creditSpins(spinsAwarded);
++              }
++              setTournamentNotice(
++                res?.message ||
++                  `­ƒÅå CAMPE├âO DO TORNEIO (${tournDiff.toUpperCase()})! +${spinsAwarded} Giros creditados!`
++              );
++              recordBattleResult({
++                mode: 'Torneio',
++                isPlayerWinner: true,
++                spinsAwarded,
++                rewardSpins: spinsAwarded,
++                opponentName: 'Grande Final do Torneio',
++                opponentAvatar: resolvePowerImage('/imagenspoderes/kamehamenha.jpg'),
++              });
++            })
++            .catch(() => {
++              creditSpins(expectedSpins);
++              setTournamentNotice(
++                `­ƒÅå CAMPE├âO DO TORNEIO (${tournDiff.toUpperCase()})! +${expectedSpins} Giros creditados!`
++              );
++              recordBattleResult({
++                mode: 'Torneio',
++                isPlayerWinner: true,
++                spinsAwarded: expectedSpins,
++                rewardSpins: expectedSpins,
++                opponentName: 'Grande Final do Torneio',
++                opponentAvatar: resolvePowerImage('/imagenspoderes/kamehamenha.jpg'),
++              });
++            });
++        } else {
++          creditSpins(expectedSpins);
++          setTournamentNotice(
++            `­ƒÅå CAMPE├âO DO TORNEIO (${tournDiff.toUpperCase()})! +${expectedSpins} Giros creditados!`
++          );
++          recordBattleResult({
++            mode: 'Torneio',
++            isPlayerWinner: true,
++            spinsAwarded: expectedSpins,
++            rewardSpins: expectedSpins,
++            opponentName: 'Grande Final do Torneio',
++            opponentAvatar: resolvePowerImage('/imagenspoderes/kamehamenha.jpg'),
++          });
++        }
++      }
++    },
++    [activeBuild, difficulty, currentUser, creditSpins, recordBattleResult]
++  );
++
++  const handleResolveMatch = useCallback(
++    (matchId) => {
++      if (!tournament) return;
++      const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
++      const updated = resolveTournamentMatch(tournament, matchId);
++      setTournament({ ...updated });
++      setActiveMatch(null);
++
++      // Se a partida envolvia o jogador e ele perdeu, registra derrota (sem giros)
++      if (match) {
++        const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
++        const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
++        if (isUser1 || isUser2) {
++          const userFighter = isUser1 ? match.fighter1 : match.fighter2;
++          const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
++
++          // Localiza a partida atualizada
++          const resolvedMatch = updated.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
++          const isPlayerWinner = resolvedMatch?.winner?.name === userFighter?.name;
++
++          if (!isPlayerWinner) {
++            setTournamentNotice('Voc├¬ foi eliminado desta edi├º├úo do Torneio. Tente novamente na pr├│xima temporada!');
+             recordBattleResult({
+               mode: 'Torneio',
+-              isPlayerWinner: res.isPlayerWinner,
+-              rewardSpins: res.spinsAwarded,
+-              spinsAwarded: res.spinsAwarded,
+-              opponentName: opponentFighter.name,
+-              opponentAvatar: opponentFighter.avatar,
++              isPlayerWinner: false,
++              spinsAwarded: 0,
++              rewardSpins: 0,
++              opponentName: opponentFighter?.name || 'Rival do Torneio',
++              opponentAvatar: resolvePowerImage(opponentFighter?.avatar),
+             });
+           }
+-        }).catch(() => {});
++        }
+       }
+-    }
+-  }, [tournament, currentUser, activeBuild, difficulty, recordBattleResult]);
++
++      // Se o torneio foi conclu├¡do, verifica se o jogador ├® o campe├úo para creditar a premia├º├úo
++      checkAndAwardTournamentChampion(updated);
++    },
++    [tournament, activeBuild, recordBattleResult, checkAndAwardTournamentChampion]
++  );
+ 
+   function handleSimulateAll() {
+     if (!tournament) return;
+@@ -151,6 +226,7 @@ export default function Torneio() {
+       const updated = autoSimulateTournament(tournament);
+       setTournament({ ...updated });
+       setSimulatingAll(false);
++      checkAndAwardTournamentChampion(updated);
+     }, 400);
+   }
+ 

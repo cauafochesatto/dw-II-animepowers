@@ -74,7 +74,7 @@ export default function Auth({ initialMode = 'login' }) {
     navigate(paraCadastro ? '/cadastro' : '/login');
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setAlert(null);
 
@@ -94,14 +94,16 @@ export default function Auth({ initialMode = 'login' }) {
     }
 
     setIsLoading(true);
-    const res = ehLogin ? login(nickname, password, rememberMe) : register(nickname, password, null);
+    const res = ehLogin
+      ? await login(nickname, password, rememberMe)
+      : await register(nickname, password, null);
     setIsLoading(false);
 
-    if (res.success) {
+    if (res?.success) {
       setAlert({ type: 'success', text: `${res.message} Levando você ao catálogo...` });
       setTimeout(() => navigate('/catalogo'), 700);
     } else {
-      setAlert({ type: 'error', text: res.message });
+      setAlert({ type: 'error', text: res?.message || 'Erro ao processar solicitação.' });
     }
   }
 

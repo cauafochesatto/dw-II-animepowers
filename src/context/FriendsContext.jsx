@@ -286,7 +286,9 @@ export function FriendsProvider({ children }) {
 
       if (userId === myId) {
         try {
-          const rawActive = localStorage.getItem('ap:active_build');
+          const rawActive =
+            (myId ? localStorage.getItem(`ap:${myId}:active_build`) : null) ||
+            localStorage.getItem('ap:active_build');
           if (rawActive) {
             const parsed = JSON.parse(rawActive);
             if (parsed && parsed.stats) return parsed;

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import { CharacterContext } from './characterContextInstance';
-import { useAuth } from './useAuth';
+import { AuthContext } from './authContextInstance';
 import {
   fetchSpinsBalance,
   consumeSpinsServer,
@@ -14,16 +14,20 @@ import {
   STAT_KEYS,
 } from '../data/characters';
 
-const STORAGE_KEYS = {
-  SPINS: 'ap:spins_count',
-  SPIN_HISTORY: 'ap:spin_history',
-  COLLECTION: 'ap:characters_collection',
-  ACTIVE_BUILD: 'ap:active_build',
-  SAVED_BUILDS: 'ap:saved_builds',
-  BATTLE_HISTORY: 'ap:battle_history',
-  BATTLE_STATS: 'ap:battle_stats',
-  LAST_REPLENISH: 'ap:last_spin_replenish',
-};
+// Gera chaves de localStorage isoladas por usuário
+function getStorageKeys(userId) {
+  const prefix = userId ? `ap:${userId}` : 'ap:guest';
+  return {
+    SPINS: `${prefix}:spins_count`,
+    SPIN_HISTORY: `${prefix}:spin_history`,
+    COLLECTION: `${prefix}:characters_collection`,
+    ACTIVE_BUILD: `${prefix}:active_build`,
+    SAVED_BUILDS: `${prefix}:saved_builds`,
+    BATTLE_HISTORY: `${prefix}:battle_history`,
+    BATTLE_STATS: `${prefix}:battle_stats`,
+    LAST_REPLENISH: `${prefix}:last_spin_replenish`,
+  };
+}
 
 // Coleção inicial amigável para novos jogadores
 const DEFAULT_INITIAL_COLLECTION = {
@@ -64,42 +68,96 @@ function writeStorage(key, value) {
   }
 }
 
-export function CharacterProvider({ children }) {
-  const auth = useAuth();
-  const currentUser = auth?.currentUser;
+function CharacterProviderInner({ currentUser, children }) {
+  const userId = currentUser?.id || null;
+
+  // Chaves de localStorage isoladas por usuário (dinâmicas, geradas a partir do userId)
+  const STORAGE_KEYS = React.useMemo(() => getStorageKeys(userId), [userId]);
+
+  // Resgata dados isolados do usuário com migração transparente de dados legados apenas para a primeira conta
+  const initialData = React.useMemo(() => {
+    const keys = STORAGE_KEYS;
+    const hasSpins = localStorage.getItem(keys.SPINS) !== null;
+    const legacySpins = localStorage.getItem('ap:spins_count');
+    const claimedBy = localStorage.getItem('ap:legacy_data_claimed');
+
+    // Se o usuário já possui dados gravados na chave isolada, usa exclusivamente ela
+    if (hasSpins) {
+      return {
+        spins: readStorage(keys.SPINS, 20),
+        spinHistory: readStorage(keys.SPIN_HISTORY, []),
+        collection: readStorage(keys.COLLECTION, DEFAULT_INITIAL_COLLECTION),
+        activeBuild: readStorage(keys.ACTIVE_BUILD, DEFAULT_INITIAL_BUILD),
+        savedBuilds: readStorage(keys.SAVED_BUILDS, [DEFAULT_INITIAL_BUILD]),
+        battleHistory: readStorage(keys.BATTLE_HISTORY, []),
+        battleStats: readStorage(keys.BATTLE_STATS, {
+          wins: 0,
+          losses: 0,
+          total: 0,
+          winRate: 0,
+          mode1v1Wins: 0,
+          mode2v2Wins: 0,
+          modeGroupWins: 0,
+        }),
+      };
+    }
+
+    // Se é a primeira conta logada e existem dados legados globais, adota para essa conta sem apagar o original
+    if (userId && legacySpins !== null && (!claimedBy || claimedBy === userId)) {
+      localStorage.setItem('ap:legacy_data_claimed', userId);
+      return {
+        spins: readStorage('ap:spins_count', 20),
+        spinHistory: readStorage('ap:spin_history', []),
+        collection: readStorage('ap:characters_collection', DEFAULT_INITIAL_COLLECTION),
+        activeBuild: readStorage('ap:active_build', DEFAULT_INITIAL_BUILD),
+        savedBuilds: readStorage('ap:saved_builds', [DEFAULT_INITIAL_BUILD]),
+        battleHistory: readStorage('ap:battle_history', []),
+        battleStats: readStorage('ap:battle_stats', {
+          wins: 0,
+          losses: 0,
+          total: 0,
+          winRate: 0,
+          mode1v1Wins: 0,
+          mode2v2Wins: 0,
+          modeGroupWins: 0,
+        }),
+      };
+    }
+
+    // Conta nova ou usuário convidado: estado limpo e independente
+    return {
+      spins: 20,
+      spinHistory: [],
+      collection: DEFAULT_INITIAL_COLLECTION,
+      activeBuild: DEFAULT_INITIAL_BUILD,
+      savedBuilds: [DEFAULT_INITIAL_BUILD],
+      battleHistory: [],
+      battleStats: {
+        wins: 0,
+        losses: 0,
+        total: 0,
+        winRate: 0,
+        mode1v1Wins: 0,
+        mode2v2Wins: 0,
+        modeGroupWins: 0,
+      },
+    };
+  }, [STORAGE_KEYS, userId]);
 
   // 1. Giros
-  const [spins, setSpins] = useState(() => readStorage(STORAGE_KEYS.SPINS, 20));
-  const [spinHistory, setSpinHistory] = useState(() => readStorage(STORAGE_KEYS.SPIN_HISTORY, []));
+  const [spins, setSpins] = useState(initialData.spins);
+  const [spinHistory, setSpinHistory] = useState(initialData.spinHistory);
 
   // 2. Coleção
-  const [collection, setCollection] = useState(() =>
-    readStorage(STORAGE_KEYS.COLLECTION, DEFAULT_INITIAL_COLLECTION)
-  );
+  const [collection, setCollection] = useState(initialData.collection);
 
   // 3. Construção Ativa & Salvas
-  const [activeBuild, setActiveBuild] = useState(() =>
-    readStorage(STORAGE_KEYS.ACTIVE_BUILD, DEFAULT_INITIAL_BUILD)
-  );
-  const [savedBuilds, setSavedBuilds] = useState(() =>
-    readStorage(STORAGE_KEYS.SAVED_BUILDS, [DEFAULT_INITIAL_BUILD])
-  );
+  const [activeBuild, setActiveBuild] = useState(initialData.activeBuild);
+  const [savedBuilds, setSavedBuilds] = useState(initialData.savedBuilds);
 
   // 4. Batalhas e Ranking
-  const [battleHistory, setBattleHistory] = useState(() =>
-    readStorage(STORAGE_KEYS.BATTLE_HISTORY, [])
-  );
-  const [battleStats, setBattleStats] = useState(() =>
-    readStorage(STORAGE_KEYS.BATTLE_STATS, {
-      wins: 0,
-      losses: 0,
-      total: 0,
-      winRate: 0,
-      mode1v1Wins: 0,
-      mode2v2Wins: 0,
-      modeGroupWins: 0,
-    })
-  );
+  const [battleHistory, setBattleHistory] = useState(initialData.battleHistory);
+  const [battleStats, setBattleStats] = useState(initialData.battleStats);
 
   const migrationPayloadRef = React.useRef({
     activeBuild,
@@ -149,14 +207,14 @@ export function CharacterProvider({ children }) {
     }
   }, [currentUser?.id]);
 
-  // Sincroniza persistência sempre que o estado muda
-  useEffect(() => writeStorage(STORAGE_KEYS.SPINS, spins), [spins]);
-  useEffect(() => writeStorage(STORAGE_KEYS.SPIN_HISTORY, spinHistory), [spinHistory]);
-  useEffect(() => writeStorage(STORAGE_KEYS.COLLECTION, collection), [collection]);
-  useEffect(() => writeStorage(STORAGE_KEYS.ACTIVE_BUILD, activeBuild), [activeBuild]);
-  useEffect(() => writeStorage(STORAGE_KEYS.SAVED_BUILDS, savedBuilds), [savedBuilds]);
-  useEffect(() => writeStorage(STORAGE_KEYS.BATTLE_HISTORY, battleHistory), [battleHistory]);
-  useEffect(() => writeStorage(STORAGE_KEYS.BATTLE_STATS, battleStats), [battleStats]);
+  // Sincroniza persistência sempre que o estado muda (usando chaves isoladas por usuário)
+  useEffect(() => writeStorage(STORAGE_KEYS.SPINS, spins), [STORAGE_KEYS.SPINS, spins]);
+  useEffect(() => writeStorage(STORAGE_KEYS.SPIN_HISTORY, spinHistory), [STORAGE_KEYS.SPIN_HISTORY, spinHistory]);
+  useEffect(() => writeStorage(STORAGE_KEYS.COLLECTION, collection), [STORAGE_KEYS.COLLECTION, collection]);
+  useEffect(() => writeStorage(STORAGE_KEYS.ACTIVE_BUILD, activeBuild), [STORAGE_KEYS.ACTIVE_BUILD, activeBuild]);
+  useEffect(() => writeStorage(STORAGE_KEYS.SAVED_BUILDS, savedBuilds), [STORAGE_KEYS.SAVED_BUILDS, savedBuilds]);
+  useEffect(() => writeStorage(STORAGE_KEYS.BATTLE_HISTORY, battleHistory), [STORAGE_KEYS.BATTLE_HISTORY, battleHistory]);
+  useEffect(() => writeStorage(STORAGE_KEYS.BATTLE_STATS, battleStats), [STORAGE_KEYS.BATTLE_STATS, battleStats]);
 
   // Lista expandida de personagens da coleção do jogador com detalhes
   const ownedCharacters = useMemo(() => {
@@ -268,12 +326,12 @@ export function CharacterProvider({ children }) {
    */
   const replenishSpins = useCallback((amount = 10) => {
     setSpins((prev) => prev + amount);
-    localStorage.setItem(STORAGE_KEYS.LAST_REPLENISH, new Date().toISOString());
+    writeStorage(STORAGE_KEYS.LAST_REPLENISH, new Date().toISOString());
     return {
       success: true,
       message: `Você recebeu +${amount} giros de recarga gratuita!`,
     };
-  }, []);
+  }, [STORAGE_KEYS.LAST_REPLENISH]);
 
   /**
    * Atualiza e valida a construção do jogador.
@@ -429,6 +487,18 @@ export function CharacterProvider({ children }) {
     <CharacterContext.Provider value={value}>
       {children}
     </CharacterContext.Provider>
+  );
+}
+
+export function CharacterProvider({ children }) {
+  const auth = useContext(AuthContext);
+  const currentUser = auth?.currentUser || null;
+  const userKey = currentUser?.id ? `user_${currentUser.id}` : 'guest';
+
+  return (
+    <CharacterProviderInner key={userKey} currentUser={currentUser}>
+      {children}
+    </CharacterProviderInner>
   );
 }
 

@@ -408,6 +408,9 @@ export async function migrateLocalDataToServer(payload) {
       const data = await res.json();
       if (data.success) {
         localStorage.setItem(STORAGE_KEYS.MIGRATION_FLAG, new Date().toISOString());
+        if (payload.userId) {
+          localStorage.setItem(`ap:neon_migrated_${payload.userId}`, new Date().toISOString());
+        }
       }
       return data;
     }

@@ -23,11 +23,12 @@ export default function Torneio() {
   const { activeBuild, recordBattleResult } = useCharacterGame();
   const { friendIds, getUserById, getUserBuild } = useFriends();
   const { currentUser } = useAuth();
+  const userTournamentKey = currentUser?.id ? `ap:${currentUser.id}:active_tournament` : 'ap:guest:active_tournament';
 
-  // Torneio em andamento carregado do storage
+  // Torneio em andamento carregado do storage isolado por usuário
   const [tournament, setTournament] = useState(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(userTournamentKey) || localStorage.getItem(STORAGE_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -44,15 +45,15 @@ export default function Torneio() {
   const [simulatingAll, setSimulatingAll] = useState(false);
   const [tournamentNotice, setTournamentNotice] = useState(null);
 
-  // Sincroniza persistência do torneio
+  // Sincroniza persistência do torneio isolada por usuário
   useEffect(() => {
     if (tournament) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tournament));
-      saveTournamentRecord(tournament).catch(() => {});
+      localStorage.setItem(userTournamentKey, JSON.stringify(tournament));
+      saveTournamentRecord({ ...tournament, userId: currentUser?.id }).catch(() => {});
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(userTournamentKey);
     }
-  }, [tournament]);
+  }, [tournament, userTournamentKey, currentUser?.id]);
 
   // Lista de amigos válidos com suas construções reais (ou representação)
   const availableFriends = useMemo(() => {

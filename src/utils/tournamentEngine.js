@@ -15,6 +15,33 @@ const ROUND_NAMES = {
 
 export const TOURNAMENT_SIZES = [4, 8, 16];
 
+export const TOURNAMENT_DIFFICULTIES = {
+  facil: {
+    key: 'facil',
+    label: 'Fácil',
+    badge: 'Iniciante',
+    statMultiplier: 0.85,
+    rewardSpins: 3,
+    description: 'Oponentes mais acessíveis com atributos atenuados. Recompensa: +3 Giros por vitória.',
+  },
+  medio: {
+    key: 'medio',
+    label: 'Médio',
+    badge: 'Desafiante',
+    statMultiplier: 1.0,
+    rewardSpins: 5,
+    description: 'Dificuldade padrão do torneio competitivo. Recompensa: +5 Giros por vitória.',
+  },
+  dificil: {
+    key: 'dificil',
+    label: 'Difícil',
+    badge: 'Supremo',
+    statMultiplier: 1.25,
+    rewardSpins: 8,
+    description: 'Guerreiros de elite com atributos amplificados em 25%. Recompensa: +8 Giros por vitória.',
+  },
+};
+
 export const EPIC_TOURNAMENT_NAMES = [
   'Torneio das Trevas Cósmicas',
   'Grande Torneio Celestial de Budokai',
@@ -31,11 +58,13 @@ export function getRandomTournamentName() {
 }
 
 /**
- * Cria a chave inicial do torneio com 4, 8 ou 16 participantes.
+ * Cria a chave inicial do torneio com 4, 8 ou 16 participantes e dificuldade selecionável.
  */
-export function createTournament(name = '', size = 8, customParticipants = [], userBuild = null) {
+export function createTournament(name = '', size = 8, customParticipants = [], userBuild = null, difficulty = 'medio') {
   const sanitizedSize = [4, 8, 16].includes(Number(size)) ? Number(size) : 8;
   const tournamentName = (name || '').trim() || getRandomTournamentName();
+  const selectedDiff = TOURNAMENT_DIFFICULTIES[difficulty] ? difficulty : 'medio';
+  const diffConfig = TOURNAMENT_DIFFICULTIES[selectedDiff];
 
   // 1. Monta a lista completa de participantes
   const participants = [];
@@ -54,7 +83,7 @@ export function createTournament(name = '', size = 8, customParticipants = [], u
     });
   }
 
-  // Preenche as vagas restantes com combatentes IA legítimos
+  // Preenche as vagas restantes com combatentes IA legítimos escalados pela dificuldade real
   const availableChars = [...CHARACTERS].sort(() => 0.5 - Math.random());
   let charIdx = 0;
 
@@ -66,6 +95,15 @@ export function createTournament(name = '', size = 8, customParticipants = [], u
       ai.avatar = aiChar.imagem;
       ai.signatureMove = aiChar.habilidadeEspecial;
     }
+
+    // Escala os atributos dos oponentes com base na dificuldade escolhida
+    const mult = diffConfig.statMultiplier;
+    const scaledStats = {};
+    for (const [k, v] of Object.entries(ai.stats)) {
+      scaledStats[k] = Math.max(15, Math.min(150, Math.round(Number(v) * mult)));
+    }
+    ai.stats = scaledStats;
+
     participants.push(createFighterState(ai, ai.name, true, 'B'));
     charIdx++;
   }
@@ -132,6 +170,8 @@ export function createTournament(name = '', size = 8, customParticipants = [], u
     id: tournamentId,
     name: tournamentName,
     size: sanitizedSize,
+    difficulty: selectedDiff,
+    rewardSpinsPerWin: diffConfig.rewardSpins,
     totalRounds,
     currentRound: 1,
     status: 'in_progress', // 'in_progress', 'completed'

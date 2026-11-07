@@ -1,20 +1,46 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCharacterGame } from '../context/useCharacterGame';
 import { useAuth } from '../context/useAuth';
 import { resolvePowerImage } from '../utils/imageHelper';
 import GameSubNav from '../components/GameSubNav';
 import { AlertTriangle } from '../components/Icons';
+import { fetchRankingOnline } from '../services/dataService';
 import '../styles/game.css';
 
 export default function Ranking() {
   const { activeBuild, battleStats, battleHistory } = useCharacterGame();
   const { currentUser } = useAuth();
 
-  // Constrói a tabela de classificação baseada exclusivamente no desempenho real registrado localmente
-  const rankingList = useMemo(() => {
+  const [onlineData, setOnlineData] = useState(null);
+
+  // Consulta o ranking global em tempo real no Neon PostgreSQL
+  useEffect(() => {
+    let isMounted = true;
+    fetchRankingOnline()
+      .then((res) => {
+        if (isMounted) {
+          if (res?.isOnline && Array.isArray(res.ranking) && res.ranking.length > 0) {
+            setOnlineData(res.ranking);
+          } else {
+            setOnlineData(null);
+          }
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setOnlineData(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Constrói a tabela local como fallback se o servidor ainda não estiver respondendo
+  const localRankingList = useMemo(() => {
     const list = [];
 
-    // Combatente do jogador atual
     const playerName = currentUser?.name || activeBuild.name || 'Jogador Local';
     const total = battleStats.total || 0;
     const wins = battleStats.wins || 0;
@@ -33,7 +59,6 @@ export default function Ranking() {
       isCurrentUser: true,
     });
 
-    // Se houver histórico de batalhas contra outros perfis/desafios salvos no dispositivo, agrega seus registros reais
     const opponentMap = {};
     battleHistory.forEach((h) => {
       const opp = h.opponentName;
@@ -50,9 +75,9 @@ export default function Ranking() {
       }
       opponentMap[opp].total += 1;
       if (h.isWin) {
-        opponentMap[opp].losses += 1; // se o jogador venceu, o oponente perdeu
+        opponentMap[opp].losses += 1;
       } else {
-        opponentMap[opp].wins += 1; // se o jogador perdeu, o oponente venceu
+        opponentMap[opp].wins += 1;
       }
     });
 
@@ -71,7 +96,6 @@ export default function Ranking() {
       });
     });
 
-    // Ordenação competitiva: maior número de vitórias, depois taxa de vitória, depois total
     list.sort((a, b) => {
       if (b.wins !== a.wins) return b.wins - a.wins;
       if (b.winRate !== a.winRate) return b.winRate - a.winRate;
@@ -80,6 +104,9 @@ export default function Ranking() {
 
     return list;
   }, [activeBuild, battleStats, battleHistory, currentUser]);
+
+  const isServerSynced = Boolean(onlineData && onlineData.length > 0);
+  const rankingList = isServerSynced ? onlineData : localRankingList;
 
   return (
     <>
@@ -96,30 +123,63 @@ export default function Ranking() {
       <div className="game-shell">
         <GameSubNav />
 
-        {/* Aviso de Transparência sobre Armazenamento Local vs Global */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.8rem',
-            padding: '1rem 1.2rem',
-            background: 'rgba(234, 179, 8, 0.12)',
-            border: '1px solid rgba(234, 179, 8, 0.4)',
-            borderRadius: 'var(--r-md)',
-            marginBottom: '2rem',
-            fontSize: '0.88rem',
-            color: '#fef08a',
-            lineHeight: 1.5,
-          }}
-        >
-          <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#facc15' }} />
-          <div>
-            <strong>Aviso de Infraestrutura Local:</strong> Este ranking reflete os dados armazenados localmente
-            neste navegador ({rankingList.length} combatentes com registros reais). Não são gerados dados falsos de
-            outros jogadores. Para sincronização entre múltiplos dispositivos, será necessária uma futura integração
-            com banco de dados e servidor online.
+        {/* Status de Infraestrutura: Online Sincronizado vs Aviso Local */}
+        {isServerSynced ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.8rem',
+              padding: '1rem 1.2rem',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: 'var(--r-md)',
+              marginBottom: '2rem',
+              fontSize: '0.88rem',
+              color: '#6ee7b7',
+              lineHeight: 1.5,
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 10px #10b981',
+                flexShrink: 0,
+              }}
+            />
+            <div>
+              <strong>Ranking Global Sincronizado (Neon PostgreSQL):</strong> Exibindo {rankingList.length} combatentes
+              reais salvos no servidor e compartilhados entre todos os jogadores e dispositivos.
+            </div>
           </div>
-        </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.8rem',
+              padding: '1rem 1.2rem',
+              background: 'rgba(234, 179, 8, 0.12)',
+              border: '1px solid rgba(234, 179, 8, 0.4)',
+              borderRadius: 'var(--r-md)',
+              marginBottom: '2rem',
+              fontSize: '0.88rem',
+              color: '#fef08a',
+              lineHeight: 1.5,
+            }}
+          >
+            <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#facc15' }} />
+            <div>
+              <strong>Aviso de Infraestrutura Local:</strong> Este ranking reflete os dados armazenados localmente
+              neste navegador ({localRankingList.length} combatentes com registros reais). Não são gerados dados falsos de
+              outros jogadores. Para sincronização entre múltiplos dispositivos, conecte a API Neon Functions.
+            </div>
+          </div>
+        )}
 
         {/* Tabela do Ranking */}
         <div style={{ overflowX: 'auto' }}>
@@ -138,70 +198,60 @@ export default function Ranking() {
             <tbody>
               {rankingList.map((entry, index) => {
                 const pos = index + 1;
-                const posBadge =
-                  pos === 1 ? '🥇 1º' : pos === 2 ? '🥈 2º' : pos === 3 ? '🥉 3º' : `#${pos}`;
+                const isFirst = pos === 1;
+                const isSecond = pos === 2;
+                const isThird = pos === 3;
+                const isMe = entry.id === currentUser?.id || entry.isCurrentUser;
 
                 return (
-                  <tr
-                    key={entry.id}
-                    className="leaderboard-row"
-                    style={
-                      entry.isCurrentUser
-                        ? {
-                            background: 'rgba(251, 191, 36, 0.08)',
-                            borderColor: 'var(--signal)',
-                          }
-                        : {}
-                    }
-                  >
-                    <td className="leaderboard-rank-col">{posBadge}</td>
-
+                  <tr key={entry.id} className={isMe ? 'is-current-user' : ''}>
+                    <td className="pos-col">
+                      <span
+                        className={`pos-badge ${
+                          isFirst ? 'pos-1' : isSecond ? 'pos-2' : isThird ? 'pos-3' : ''
+                        }`}
+                      >
+                        {isFirst ? '🥇 ' : isSecond ? '🥈 ' : isThird ? '🥉 ' : ''}#{pos}
+                      </span>
+                    </td>
                     <td>
-                      <div className="leaderboard-fighter-col">
+                      <div className="fighter-cell">
                         <img
                           src={resolvePowerImage(entry.avatar)}
                           alt={entry.name}
+                          className="fighter-cell__avatar"
+                          onError={(e) => {
+                            e.currentTarget.src = '/poderesanime/imagenspoderes/kamehamenha.jpg';
+                          }}
                         />
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
-                            {entry.name} {entry.isCurrentUser && <span style={{ color: 'var(--signal)', fontSize: '0.75rem', fontWeight: 800 }}>(VOCÊ)</span>}
+                          <div className="fighter-cell__name">
+                            {entry.name}
+                            {isMe && <span className="you-pill">Você</span>}
                           </div>
                         </div>
                       </div>
                     </td>
-
                     <td>
-                      <span className={`rank-badge rank-badge--${entry.classification?.rank || 'S'}`} style={{ fontSize: '1rem', padding: '0.2rem 0.5rem' }}>
-                        {entry.classification?.rank || 'S'}
+                      <span
+                        className={`rarity-pill rarity-pill--${entry.classification?.rank || 'A'}`}
+                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      >
+                        Rank {entry.classification?.rank || 'A'}
                       </span>
                     </td>
-
-                    <td style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--pos)' }}>
-                      {entry.wins}
-                    </td>
-
-                    <td style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--neg)' }}>
-                      {entry.losses}
-                    </td>
-
-                    <td style={{ color: 'var(--text-2)', fontWeight: 600 }}>
-                      {entry.total}
-                    </td>
-
+                    <td className="stat-highlight stat-win">{entry.wins}</td>
+                    <td className="stat-highlight stat-loss">{entry.losses}</td>
+                    <td>{entry.total}</td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--signal)' }}>
-                          {entry.winRate}%
-                        </span>
-                        <div className="stat-meter" style={{ width: '80px' }}>
+                      <div className="winrate-bar-shell">
+                        <div className="winrate-track">
                           <div
-                            className="stat-meter__fill"
-                            style={{
-                              width: `${entry.winRate}%`,
-                              background: entry.winRate >= 50 ? 'var(--pos)' : 'var(--neg)',
-                            }}
+                            className="winrate-fill"
+                            style={{ width: `${Math.min(100, Math.max(0, entry.winRate))}%` }}
                           />
                         </div>
+                        <span className="winrate-text">{entry.winRate}%</span>
                       </div>
                     </td>
                   </tr>
@@ -214,4 +264,3 @@ export default function Ranking() {
     </>
   );
 }
-

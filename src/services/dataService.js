@@ -1,7 +1,7 @@
 /**
  * Data Service & Backend Integration Layer
- * Centraliza persistência de usuários, amizades, desafios e torneios com suporte
- * a API REST / Supabase e sincronização em tempo real via BroadcastChannel.
+ * Conecta o frontend com a API Neon Functions e Neon PostgreSQL,
+ * com persistência local segura (fallback) e sincronização entre abas.
  */
 
 import { DB_CONFIG } from '../config/db';
@@ -12,7 +12,10 @@ const STORAGE_KEYS = {
   CHALLENGES: `${DB_CONFIG.dbName}_challenges_table`,
   TOURNAMENTS: `${DB_CONFIG.dbName}_tournaments_table`,
   ACTIVE_SESSION: `${DB_CONFIG.dbName}_auth_session`,
+  MIGRATION_FLAG: 'ap:neon_migration_completed',
 };
+
+const API_BASE = DB_CONFIG.apiUrl || 'http://localhost:3001/api';
 
 // Canal de comunicação inter-abas em tempo real para sincronização instantânea
 let syncChannel = null;
@@ -64,22 +67,22 @@ function writeLocal(key, value) {
    USUÁRIOS (AUTH & PERFIL)
    ============================================================================ */
 
-export async function fetchAllUsers() {
-  // 1. Tenta carregar do backend remoto se URL configurada
-  if (DB_CONFIG.apiUrl && DB_CONFIG.storageMode === 'cloud_only') {
-    try {
-      const res = await fetch(`${DB_CONFIG.apiUrl}/users`);
-      if (res.ok) {
-        const users = await res.json();
-        writeLocal(STORAGE_KEYS.USERS, users);
-        return users;
+export async function fetchAllUsers(currentUserId = '') {
+  // 1. Tenta carregar do backend Neon Functions
+  try {
+    const res = await fetch(`${API_BASE}/friends/users/search?currentUserId=${encodeURIComponent(currentUserId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        writeLocal(STORAGE_KEYS.USERS, data.users);
+        return data.users;
       }
-    } catch {
-      // fallback
     }
+  } catch {
+    // Falha silenciosa: usa armazenamento local
   }
 
-  // 2. Carrega do banco local
+  // 2. Fallback para banco local
   return readLocal(STORAGE_KEYS.USERS, []);
 }
 
@@ -104,24 +107,71 @@ export async function saveUserRecord(user) {
   writeLocal(STORAGE_KEYS.USERS, updatedUsers);
   notifySync('USERS_UPDATED', { userId: user.id });
 
-  // Tenta sincronizar com API remota em segundo plano se configurada
-  if (DB_CONFIG.apiUrl && DB_CONFIG.apiUrl !== 'http://localhost:3001/api') {
-    fetch(`${DB_CONFIG.apiUrl}/users`, {
+  // Tenta sincronizar com API Neon Functions
+  try {
+    await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
-    }).catch(() => {});
+    });
+  } catch {
+    // Mantém gravado localmente
   }
 
   return { success: true, user };
 }
 
 /* ============================================================================
-   AMIZADES (FRIENDSHIPS)
+   AMIZADES (FRIENDSHIPS NO NEON)
    ============================================================================ */
 
 export async function fetchUserFriendships(userId) {
   if (!userId) return [];
+
+  // 1. Tenta carregar do backend Neon Functions
+  try {
+    const res = await fetch(`${API_BASE}/friends/${encodeURIComponent(userId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        // Atualiza cópia local com dados reais do Neon
+        const formattedLocal = [
+          ...data.friends.map((f) => ({
+            id: f.friendship_id,
+            userId,
+            friendId: f.friend_id,
+            status: 'accepted',
+            friendMeta: {
+              name: f.name,
+              username: f.username,
+              avatar: f.avatar,
+              rank: f.rank,
+              wins: f.wins,
+              losses: f.losses,
+            },
+          })),
+          ...data.sentRequests.map((s) => ({
+            id: s.request_id,
+            userId,
+            friendId: s.target_id,
+            status: 'pending',
+          })),
+          ...data.receivedRequests.map((r) => ({
+            id: r.request_id,
+            userId: r.sender_id,
+            friendId: userId,
+            status: 'pending',
+          })),
+        ];
+        writeLocal(STORAGE_KEYS.FRIENDSHIPS, formattedLocal);
+        return formattedLocal;
+      }
+    }
+  } catch {
+    // Continua para o fallback local
+  }
+
+  // 2. Fallback para banco local
   const allFriendships = readLocal(STORAGE_KEYS.FRIENDSHIPS, []);
   return allFriendships.filter((f) => f.userId === userId || f.friendId === userId);
 }
@@ -130,9 +180,27 @@ export async function requestFriendship(userId, friendId) {
   if (!userId || !friendId) return { success: false, message: 'Identificadores inválidos.' };
   if (userId === friendId) return { success: false, message: 'Você não pode adicionar seu próprio perfil.' };
 
-  const all = readLocal(STORAGE_KEYS.FRIENDSHIPS, []);
+  // 1. Tenta envio online via Neon Functions
+  try {
+    const res = await fetch(`${API_BASE}/friends/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, targetId: friendId }),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      notifySync('FRIENDSHIP_CREATED', { userId, friendId });
+      return { success: true, message: data.message };
+    }
+    if (!res.ok && data.error) {
+      return { success: false, message: data.error };
+    }
+  } catch {
+    // Prossegue com fallback local se o servidor estiver temporariamente inacessível
+  }
 
-  // Verifica se já existe relação
+  // 2. Fallback Local
+  const all = readLocal(STORAGE_KEYS.FRIENDSHIPS, []);
   const existing = all.find(
     (f) =>
       (f.userId === userId && f.friendId === friendId) ||
@@ -147,7 +215,6 @@ export async function requestFriendship(userId, friendId) {
       return { success: false, message: 'Pedido já enviado. Aguardando resposta.' };
     }
     if (existing.userId === friendId && existing.status === 'pending') {
-      // Reciprocidade: o outro já havia pedido, então confirma a amizade
       existing.status = 'accepted';
       existing.updatedAt = new Date().toISOString();
       writeLocal(STORAGE_KEYS.FRIENDSHIPS, all);
@@ -156,7 +223,6 @@ export async function requestFriendship(userId, friendId) {
     }
   }
 
-  // Cria novo pedido
   const newFriendship = {
     id: `fr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     userId,
@@ -174,6 +240,22 @@ export async function requestFriendship(userId, friendId) {
 }
 
 export async function updateFriendshipStatus(friendshipId, status) {
+  // 1. Tenta atualizar no Neon Functions
+  try {
+    const res = await fetch(`${API_BASE}/friends/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ friendshipId, status }),
+    });
+    if (res.ok) {
+      notifySync('FRIENDSHIP_UPDATED', { id: friendshipId, status });
+      return { success: true, message: status === 'accepted' ? 'Pedido aceito!' : 'Pedido recusado.' };
+    }
+  } catch {
+    // Fallback local
+  }
+
+  // 2. Fallback Local
   const all = readLocal(STORAGE_KEYS.FRIENDSHIPS, []);
   const index = all.findIndex((f) => f.id === friendshipId);
   if (index < 0) return { success: false, message: 'Solicitação não encontrada.' };
@@ -186,6 +268,18 @@ export async function updateFriendshipStatus(friendshipId, status) {
 }
 
 export async function cancelOrDeleteFriendship(userId, friendId) {
+  // 1. Tenta remover no Neon Functions
+  try {
+    await fetch(`${API_BASE}/friends`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, targetId: friendId }),
+    });
+  } catch {
+    // Continua para sincronizar local
+  }
+
+  // 2. Fallback Local
   const all = readLocal(STORAGE_KEYS.FRIENDSHIPS, []);
   const filtered = all.filter(
     (f) =>
@@ -199,6 +293,128 @@ export async function cancelOrDeleteFriendship(userId, friendId) {
   notifySync('FRIENDSHIP_DELETED', { userId, friendId });
 
   return { success: true, message: 'Relação de amizade cancelada/removida com sucesso.' };
+}
+
+/* ============================================================================
+   RANKING GLOBAL SINCRONIZADO NO NEON
+   ============================================================================ */
+
+export async function fetchRankingOnline() {
+  try {
+    const res = await fetch(`${API_BASE}/ranking`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.ranking)) {
+        return {
+          isOnline: true,
+          ranking: data.ranking,
+          totalPlayers: data.totalPlayers,
+        };
+      }
+    }
+  } catch {
+    // Servidor offline ou inacessível
+  }
+  return { isOnline: false, ranking: [] };
+}
+
+/* ============================================================================
+   BATALHAS E RECOMPENSAS VALIDADAS PELO SERVIDOR
+   ============================================================================ */
+
+export async function resolveArenaBattleServer(payload) {
+  try {
+    const res = await fetch(`${API_BASE}/battles/arena/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[dataService] Falha ao registrar batalha na API Neon:', err);
+  }
+  return null;
+}
+
+export async function resolveTournamentMatchServer(payload) {
+  try {
+    const res = await fetch(`${API_BASE}/battles/tournament/match`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[dataService] Falha ao registrar partida do torneio na API Neon:', err);
+  }
+  return null;
+}
+
+/* ============================================================================
+   GIROS E ECONOMIA (NEON POSTGRESQL)
+   ============================================================================ */
+
+export async function fetchSpinsBalance(userId) {
+  if (!userId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/spins/${encodeURIComponent(userId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && typeof data.spins === 'number') {
+        return data.spins;
+      }
+    }
+  } catch {
+    // Falha silenciosa
+  }
+  return null;
+}
+
+export async function consumeSpinsServer(userId, count = 1) {
+  if (!userId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/spins/consume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, count }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch {
+    // Servidor offline
+  }
+  return null;
+}
+
+/* ============================================================================
+   MIGRAÇÃO DE DADOS LOCAIS DO NAVEGADOR PARA O NEON
+   ============================================================================ */
+
+export async function migrateLocalDataToServer(payload) {
+  if (!payload?.userId) return { success: false };
+  try {
+    const res = await fetch(`${API_BASE}/sync/migrate-local`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem(STORAGE_KEYS.MIGRATION_FLAG, new Date().toISOString());
+      }
+      return data;
+    }
+  } catch (err) {
+    console.warn('[dataService] Migração para o servidor aguardando conexão:', err);
+  }
+  return { success: false };
 }
 
 /* ============================================================================
@@ -279,4 +495,3 @@ export async function saveTournamentRecord(tournament) {
   notifySync('TOURNAMENT_UPDATED', { id: tournament.id });
   return { success: true, tournament };
 }
-

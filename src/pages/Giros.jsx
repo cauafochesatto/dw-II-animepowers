@@ -87,15 +87,30 @@ export default function Giros() {
                 Giros Disponíveis:
               </span>
               <span className="spin-counter__number">{spins}</span>
-              <button
-                type="button"
-                className="btn-replenish"
-                onClick={handleReplenish}
-                title="Recarregar giros gratuitamente"
-              >
-                + Repor Grátis (+10)
-              </button>
+              {spins === 0 && (
+                <button
+                  type="button"
+                  className="btn-replenish"
+                  onClick={handleReplenish}
+                  title="Recarga emergencial de testes para quando o saldo for zerado"
+                >
+                  + Repor Reserva (+10)
+                </button>
+              )}
             </div>
+
+            <p
+              style={{
+                fontSize: '0.8rem',
+                color: 'var(--text-3)',
+                margin: '0.4rem 0 1rem',
+                textAlign: 'center',
+                maxWidth: '480px',
+                lineHeight: 1.4,
+              }}
+            >
+              ⚔️ <strong>Economia Oficial:</strong> Novos guerreiros iniciam com 20 giros. Conquiste mais giros vencendo na <strong>Arena (+2)</strong> ou no <strong>Torneio (+3 a +8)</strong>!
+            </p>
 
             <div className={`spin-portal${isSpinning ? ' is-spinning' : ''}`}>
               {isSpinning ? (

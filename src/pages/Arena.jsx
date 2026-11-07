@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCharacterGame } from '../context/useCharacterGame';
+import { useAuth } from '../context/useAuth';
 import {
   simulate1v1,
   simulate2v2,
@@ -10,11 +11,13 @@ import {
 import { resolvePowerImage } from '../utils/imageHelper';
 import GameSubNav from '../components/GameSubNav';
 import { Swords } from '../components/Icons';
+import { resolveArenaBattleServer } from '../services/dataService';
 import '../styles/game.css';
 
 export default function Arena() {
   const location = useLocation();
   const { activeBuild, recordBattleResult } = useCharacterGame();
+  const { currentUser } = useAuth();
 
   // Recebe desafio vindo de amigos via location.state se existir
   const challengeState = location.state?.challenge || null;
@@ -23,6 +26,7 @@ export default function Arena() {
   const [battleInProgress, setBattleInProgress] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [battleResult, setBattleResult] = useState(null);
+  const [arenaRewardNotice, setArenaRewardNotice] = useState(null);
   const [currentRoundIdx, setCurrentRoundIdx] = useState(0);
   const [speedMultiplier, setSpeedMultiplier] = useState(1); // 1 = normal, 2 = rápido, 0 = instantâneo
   const [logFilter, setLogFilter] = useState('all'); // 'all' | 'special' | 'crit' | 'dodge'
@@ -77,6 +81,23 @@ export default function Arena() {
     setIsPaused(false);
     recordBattleResult(result);
 
+    // Validação online no Neon e concessão de giros por vitória
+    if (currentUser?.id) {
+      const battleId = `bat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      resolveArenaBattleServer({
+        userId: currentUser.id,
+        battleId,
+        playerBuild: activeBuild,
+        opponentBuild: mode === '1v1' ? opponent1v1 : teamB2v2[0],
+        mode,
+      }).then((res) => {
+        if (res?.spinsAwarded > 0) {
+          setArenaRewardNotice(res.message || `🏆 Vitória na Arena! +${res.spinsAwarded} Giros recebidos!`);
+          recordBattleResult({ ...result, spinsAwarded: res.spinsAwarded });
+        }
+      }).catch(() => {});
+    }
+
     // Coloca todos no estado final exato
     if (result.finalState) {
       setLiveFighters(result.finalState);
@@ -84,7 +105,7 @@ export default function Arena() {
     // Mostra todos os logs
     const allActions = (result.rounds || []).flatMap((r) => r.actions).reverse();
     setLiveLogs(allActions);
-  }, [recordBattleResult]);
+  }, [recordBattleResult, currentUser, activeBuild, mode, opponent1v1, teamB2v2]);
 
   const playRoundStep = useCallback((result, roundIdx) => {
     if (!result?.rounds || roundIdx >= result.rounds.length) {
@@ -315,6 +336,35 @@ export default function Arena() {
 
       <div className="game-shell">
         <GameSubNav />
+
+        {/* Notificação de recompensa de giros na Arena */}
+        {arenaRewardNotice && (
+          <div
+            style={{
+              padding: '1rem 1.2rem',
+              background: 'rgba(16, 185, 129, 0.18)',
+              border: '1px solid #10b981',
+              borderRadius: 'var(--r-md)',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.8rem',
+              color: '#6ee7b7',
+              fontWeight: 700,
+            }}
+          >
+            <div>{arenaRewardNotice}</div>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => setArenaRewardNotice(null)}
+              style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+            >
+              Fechar
+            </button>
+          </div>
+        )}
 
         {/* Notificação se recebido via desafio de amigos */}
         {challengeState && (

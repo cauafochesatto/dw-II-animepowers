@@ -1,0 +1,21 @@
+{
+  "name": "animepowers-neon-functions",
+  "version": "1.0.0",
+  "description": "Neon Functions Serverless Backend for Anime Powers",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node src/dev-server.js",
+    "start": "node src/dev-server.js"
+  },
+  "dependencies": {
+    "@neon/functions": "^0.11.0",
+    "hono": "^4.7.2",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.13.8",
+    "dotenv": "^16.4.7"
+  }
+}
+

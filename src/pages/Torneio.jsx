@@ -1,25 +1,28 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useCharacterGame } from '../context/useCharacterGame';
 import { useFriends } from '../context/useFriends';
+import { useAuth } from '../context/useAuth';
 import {
   createTournament,
   resolveTournamentMatch,
   autoSimulateTournament,
   TOURNAMENT_SIZES,
+  TOURNAMENT_DIFFICULTIES,
   getRandomTournamentName,
 } from '../utils/tournamentEngine';
 import { resolvePowerImage } from '../utils/imageHelper';
 import GameSubNav from '../components/GameSubNav';
 import { Swords, Check, Close } from '../components/Icons';
-import { saveTournamentRecord } from '../services/dataService';
+import { saveTournamentRecord, resolveTournamentMatchServer } from '../services/dataService';
 import '../styles/tournament.css';
 import '../styles/game.css';
 
 const STORAGE_KEY = 'ap:active_tournament';
 
 export default function Torneio() {
-  const { activeBuild } = useCharacterGame();
+  const { activeBuild, recordBattleResult } = useCharacterGame();
   const { friendIds, getUserById, getUserBuild } = useFriends();
+  const { currentUser } = useAuth();
 
   // Torneio em andamento carregado do storage
   const [tournament, setTournament] = useState(() => {
@@ -33,11 +36,13 @@ export default function Torneio() {
 
   // Configurações para criação de novo torneio
   const [size, setSize] = useState(8);
+  const [difficulty, setDifficulty] = useState('medio');
   const [customName, setCustomName] = useState(() => getRandomTournamentName());
   const [includeUser, setIncludeUser] = useState(true);
   const [selectedFriendIds, setSelectedFriendIds] = useState([]);
   const [activeMatch, setActiveMatch] = useState(null); // Confronto aberto em modal
   const [simulatingAll, setSimulatingAll] = useState(false);
+  const [tournamentNotice, setTournamentNotice] = useState(null);
 
   // Sincroniza persistência do torneio
   useEffect(() => {
@@ -81,7 +86,8 @@ export default function Torneio() {
       customName,
       size,
       friendsToInclude,
-      includeUser ? activeBuild : null
+      includeUser ? activeBuild : null,
+      difficulty
     );
     setTournament(newTourn);
   }
@@ -100,10 +106,42 @@ export default function Torneio() {
 
   const handleResolveMatch = useCallback((matchId) => {
     if (!tournament) return;
+    const match = tournament.rounds.flatMap((r) => r.matches).find((m) => m.id === matchId);
     const updated = resolveTournamentMatch(tournament, matchId);
     setTournament({ ...updated });
     setActiveMatch(null);
-  }, [tournament]);
+
+    // Validação online no Neon e concessão de giros proporcionais à dificuldade
+    if (match && currentUser?.id) {
+      const isUser1 = match.fighter1?.name === activeBuild?.name || !match.fighter1?.isAi;
+      const isUser2 = match.fighter2?.name === activeBuild?.name || !match.fighter2?.isAi;
+      if (isUser1 || isUser2) {
+        const userFighter = isUser1 ? match.fighter1 : match.fighter2;
+        const opponentFighter = isUser1 ? match.fighter2 : match.fighter1;
+
+        resolveTournamentMatchServer({
+          userId: currentUser.id,
+          matchId: `${tournament.id}_${matchId}`,
+          tournamentId: tournament.id,
+          playerBuild: userFighter,
+          opponentBuild: opponentFighter,
+          difficulty: tournament.difficulty || difficulty,
+        }).then((res) => {
+          if (res?.spinsAwarded > 0) {
+            setTournamentNotice(res.message || `🏆 Vitória no Torneio! +${res.spinsAwarded} Giros creditados!`);
+            recordBattleResult({
+              mode: 'Torneio',
+              isPlayerWinner: res.isPlayerWinner,
+              rewardSpins: res.spinsAwarded,
+              spinsAwarded: res.spinsAwarded,
+              opponentName: opponentFighter.name,
+              opponentAvatar: opponentFighter.avatar,
+            });
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [tournament, currentUser, activeBuild, difficulty, recordBattleResult]);
 
   function handleSimulateAll() {
     if (!tournament) return;
@@ -130,6 +168,34 @@ export default function Torneio() {
 
       <div className="game-shell">
         <GameSubNav />
+
+        {tournamentNotice && (
+          <div
+            style={{
+              padding: '1rem 1.2rem',
+              background: 'rgba(16, 185, 129, 0.18)',
+              border: '1px solid #10b981',
+              borderRadius: 'var(--r-md)',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.8rem',
+              color: '#6ee7b7',
+              fontWeight: 700,
+            }}
+          >
+            <div>{tournamentNotice}</div>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => setTournamentNotice(null)}
+              style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+            >
+              Fechar
+            </button>
+          </div>
+        )}
 
         {!tournament ? (
           /* ==================================== TELA DE CONFIGURAÇÃO DO TORNEIO */
@@ -185,6 +251,34 @@ export default function Torneio() {
                         {s} Lutadores
                         <span className="tourn-size-sub">
                           {s === 4 ? 'Semis e Final' : s === 8 ? 'Quartas, Semis, Final' : 'Oitavas até Final'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dificuldade e Recompensas (Fácil, Médio, Difícil) */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="field__label" style={{ display: 'block', marginBottom: '0.4rem' }}>
+                    Nível de Dificuldade & Recompensas em Giros
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.8rem' }}>
+                    {Object.values(TOURNAMENT_DIFFICULTIES).map((diff) => (
+                      <button
+                        key={diff.key}
+                        type="button"
+                        className={`tourn-size-btn${difficulty === diff.key ? ' is-active' : ''}`}
+                        onClick={() => setDifficulty(diff.key)}
+                        style={{ textAlign: 'left', padding: '0.9rem 1rem' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                          <strong style={{ fontSize: '1.05rem' }}>{diff.label}</strong>
+                          <span className="rarity-pill rarity-pill--Épico" style={{ fontSize: '0.7rem' }}>
+                            +{diff.rewardSpins} Giros / vitória
+                          </span>
+                        </div>
+                        <span className="tourn-size-sub" style={{ lineHeight: 1.4 }}>
+                          {diff.description}
                         </span>
                       </button>
                     ))}

@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { CharacterContext } from './characterContextInstance';
+import { useAuth } from './useAuth';
+import {
+  fetchSpinsBalance,
+  consumeSpinsServer,
+  migrateLocalDataToServer,
+} from '../services/dataService';
 import {
   CHARACTERS,
   CHARACTERS_BY_ID,
@@ -59,6 +65,9 @@ function writeStorage(key, value) {
 }
 
 export function CharacterProvider({ children }) {
+  const auth = useAuth();
+  const currentUser = auth?.currentUser;
+
   // 1. Giros
   const [spins, setSpins] = useState(() => readStorage(STORAGE_KEYS.SPINS, 20));
   const [spinHistory, setSpinHistory] = useState(() => readStorage(STORAGE_KEYS.SPIN_HISTORY, []));
@@ -91,6 +100,54 @@ export function CharacterProvider({ children }) {
       modeGroupWins: 0,
     })
   );
+
+  const migrationPayloadRef = React.useRef({
+    activeBuild,
+    savedBuilds,
+    collection,
+    spins,
+    battleStats,
+    battleHistory,
+  });
+
+  useEffect(() => {
+    migrationPayloadRef.current = {
+      activeBuild,
+      savedBuilds,
+      collection,
+      spins,
+      battleStats,
+      battleHistory,
+    };
+  }, [activeBuild, savedBuilds, collection, spins, battleStats, battleHistory]);
+
+  // Sincroniza saldo de giros com o Neon PostgreSQL quando o usuário estiver autenticado
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    fetchSpinsBalance(currentUser.id).then((serverSpins) => {
+      if (typeof serverSpins === 'number') {
+        setSpins(serverSpins);
+      }
+    });
+
+    // Migração transparente dos dados locais existentes para o Neon (executada uma única vez)
+    const migrationKey = `ap:neon_migrated_${currentUser.id}`;
+    if (!localStorage.getItem(migrationKey)) {
+      const payload = migrationPayloadRef.current;
+      migrateLocalDataToServer({
+        userId: currentUser.id,
+        ...payload,
+      }).then((res) => {
+        if (res?.success) {
+          localStorage.setItem(migrationKey, new Date().toISOString());
+          if (typeof res.finalSpins === 'number') {
+            setSpins(res.finalSpins);
+          }
+        }
+      });
+    }
+  }, [currentUser?.id]);
 
   // Sincroniza persistência sempre que o estado muda
   useEffect(() => writeStorage(STORAGE_KEYS.SPINS, spins), [spins]);
@@ -194,12 +251,17 @@ export function CharacterProvider({ children }) {
     setCollection(newCollection);
     setSpinHistory((prev) => [...newHistoryEntries, ...prev].slice(0, 50));
 
+    // Consome saldo no servidor Neon se autenticado
+    if (currentUser?.id) {
+      consumeSpinsServer(currentUser.id, count).catch(() => {});
+    }
+
     return {
       success: true,
       message: `Você realizou ${count} giro(s) com sucesso!`,
       pulled,
     };
-  }, [spins, collection]);
+  }, [spins, collection, currentUser]);
 
   /**
    * Reposição gratuita de giros (sem moedas, sem pagamentos).
@@ -322,6 +384,11 @@ export function CharacterProvider({ children }) {
     };
 
     setBattleHistory((prev) => [historyRecord, ...prev].slice(0, 50));
+
+    // Se a batalha concedeu recompensa oficial em giros, credita ao saldo
+    if (battleResult.spinsAwarded && battleResult.spinsAwarded > 0) {
+      setSpins((prev) => prev + battleResult.spinsAwarded);
+    }
 
     setBattleStats((prev) => {
       const wins = prev.wins + (isWin ? 1 : 0);

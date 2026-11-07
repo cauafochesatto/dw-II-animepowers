@@ -3,6 +3,7 @@ import { AuthContext } from './authContextInstance';
 import { FriendsContext } from './friendsContextInstance';
 import {
   fetchAllUsers,
+  fetchUserFriendships,
   requestFriendship,
   cancelOrDeleteFriendship,
   createBattleChallenge,
@@ -64,10 +65,38 @@ export function FriendsProvider({ children }) {
   const [allUsers, setAllUsers] = useState(getAllUsersSync);
 
   const refreshAll = useCallback(async () => {
-    const users = await fetchAllUsers();
-    setAllUsers(users);
-    setFriendsData(loadLegacyData());
-  }, []);
+    const users = await fetchAllUsers(myId);
+    if (Array.isArray(users) && users.length > 0) {
+      setAllUsers(users);
+    }
+
+    if (myId) {
+      const friendships = await fetchUserFriendships(myId);
+      const data = loadLegacyData();
+      const me = getOrInit(data, myId);
+
+      if (Array.isArray(friendships) && friendships.length > 0) {
+        const accepted = friendships
+          .filter((f) => f.status === 'accepted')
+          .map((f) => (f.userId === myId ? f.friendId : f.userId));
+        const sent = friendships
+          .filter((f) => f.status === 'pending' && f.userId === myId)
+          .map((f) => f.friendId);
+        const received = friendships
+          .filter((f) => f.status === 'pending' && f.friendId === myId)
+          .map((f) => f.userId);
+
+        me.friends = [...new Set([...me.friends, ...accepted])];
+        me.sentRequests = [...new Set(sent)];
+        me.receivedRequests = [...new Set(received)];
+      }
+
+      saveLegacyData(data);
+      setFriendsData({ ...data });
+    } else {
+      setFriendsData(loadLegacyData());
+    }
+  }, [myId]);
 
   // Sincronização em tempo real via BroadcastChannel e window focus
   useEffect(() => {

@@ -1,0 +1,285 @@
+/* ============================================================================
+   ANIME POWERS — TORNEIO ELIMINATÓRIO
+   ============================================================================ */
+
+.tournament-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+/* ---------------------------------------------------- painel de configuração */
+.tourn-config-card {
+  background: radial-gradient(circle at top, #181822 0%, #09090d 100%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6);
+}
+
+.tourn-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.tourn-size-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.tourn-size-btn {
+  background: var(--surface-2);
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 1rem 0.5rem;
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  transition: all var(--t-fast) var(--ease);
+}
+
+.tourn-size-btn:hover {
+  border-color: var(--signal-line);
+  color: var(--text);
+}
+
+.tourn-size-btn.is-active {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: color-mix(in oklch, var(--signal) 12%, transparent);
+}
+
+.tourn-size-sub {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  text-transform: none;
+}
+
+/* ---------------------------------------------------- participantes preview */
+.tourn-participants-box {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.tourn-participants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.tourn-p-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0.6rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tourn-p-chip--user {
+  border-color: var(--signal);
+  background: color-mix(in oklch, var(--signal) 8%, transparent);
+}
+
+.tourn-p-chip__img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+}
+
+.tourn-p-chip__name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* ---------------------------------------------------- visual bracket (chave) */
+.tourn-bracket-wrap {
+  overflow-x: auto;
+  padding-bottom: 1.5rem;
+  scrollbar-width: thin;
+}
+
+.tourn-bracket-wrap::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tourn-bracket-wrap::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+
+.tourn-bracket {
+  display: flex;
+  gap: 2rem;
+  min-width: max-content;
+  align-items: stretch;
+  padding: 1rem 0;
+}
+
+.tourn-round-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  max-width: 290px;
+}
+
+.tourn-round-head {
+  text-align: center;
+  padding: 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  margin-bottom: 1.5rem;
+}
+
+.tourn-round-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  color: var(--signal);
+  margin: 0;
+}
+
+.tourn-matches-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  flex: 1;
+  gap: 1.5rem;
+}
+
+/* ---------------------------------------------------- match card */
+.tourn-match {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+  transition: all var(--t-fast) var(--ease);
+}
+
+.tourn-match:hover {
+  border-color: var(--line-strong);
+}
+
+.tourn-match.is-ready {
+  border-color: var(--signal-line);
+  box-shadow: 0 0 15px rgba(255, 107, 0, 0.12);
+}
+
+.tourn-match.is-completed {
+  border-color: var(--line);
+}
+
+.tourn-fighter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+}
+
+.tourn-fighter-row.is-winner {
+  border-color: var(--pos);
+  background: color-mix(in oklch, var(--pos) 10%, transparent);
+}
+
+.tourn-fighter-row.is-loser {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.tourn-fighter-row__info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.tourn-fighter-row__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tourn-fighter-row__name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------- pódio campeão */
+.tourn-champion-banner {
+  background: radial-gradient(circle at center, #231b0e 0%, #0d0a06 100%);
+  border: 2px solid var(--signal);
+  border-radius: var(--r-lg);
+  padding: clamp(2rem, 5vw, 3.5rem);
+  text-align: center;
+  box-shadow: 0 0 50px rgba(255, 140, 0, 0.35);
+  animation: tourn-champ-in 0.6s var(--ease-out) both;
+}
+
+@keyframes tourn-champ-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.tourn-champion-avatar {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid var(--signal);
+  margin: 0 auto 1.25rem;
+  box-shadow: 0 0 35px var(--signal-line);
+}
+
+.tourn-champion-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  text-transform: uppercase;
+  color: var(--signal);
+  margin: 0 0 0.5rem;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------- match modal */
+.tourn-modal-arena {
+  width: 100%;
+  max-width: 680px;
+}
+

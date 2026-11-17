@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { elementClass } from '../data/elementMeta';
 import { Star, ArrowUpRight } from './Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 
 /**
  * Cartão de poder — usado na grade do catálogo e nos trilhos da home.
@@ -20,7 +21,7 @@ export default function PowerCard({ power, isFav, onFav, revealIndex }) {
         aria-hidden="true"
       >
         <img
-          src={power.imagem}
+          src={resolvePowerImage(power.imagem)}
           alt=""
           className="pcard__img"
           loading="lazy"

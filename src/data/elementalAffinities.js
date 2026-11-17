@@ -4,13 +4,13 @@
 export const ELEMENTAL_AFFINITIES = {
   // Fogo
   Fogo: {
-    forteContra: ['Vento', 'Terra', 'Gelo', 'Planta', 'Madeira'],  // +20% dano
+    forteContra: ['Vento', 'Gelo', 'Planta', 'Madeira'], // +20% dano
     fracoContra: ['Água', 'Terra', 'Pedra'], // -20% dano
     neutro: ['Fogo', 'Trovão', 'Luz', 'Sombra', 'Espaço', 'Tempo', 'Físico', 'Energia']
   },
   // Água
   Água: {
-    forteContra: ['Fogo', 'Terra', 'Pedra', 'Fogo'], // +20% dano
+    forteContra: ['Fogo', 'Terra', 'Pedra'], // +20% dano
     fracoContra: ['Trovão', 'Planta', 'Madeira', 'Vento'], // -20% dano
     neutro: ['Água', 'Gelo', 'Luz', 'Sombra', 'Espaço', 'Tempo', 'Físico', 'Energia']
   },

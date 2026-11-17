@@ -730,3 +730,138 @@ ON CONFLICT (id) DO UPDATE SET
   descricao = EXCLUDED.descricao,
   imagem = EXCLUDED.imagem;
 SELECT setval(pg_get_serial_sequence('powers', 'id'), COALESCE((SELECT MAX(id) + 1 FROM powers), 1), false);
+
+-- ============================================================================
+-- MIGRAÇÕES — SISTEMA DE AMIZADES, DESAFIOS E TORNEIOS (ANIME POWERS)
+-- ============================================================================
+
+-- Tabela de Amizades (Relacionamentos entre Usuários)
+CREATE TABLE IF NOT EXISTS friendships (
+    id VARCHAR(60) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    friend_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'accepted', 'declined'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_friendship_pair UNIQUE (user_id, friend_id),
+    CONSTRAINT no_self_friendship CHECK (user_id != friend_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships(friend_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_status ON friendships(status);
+
+-- Tabela de Desafios de Batalha entre Usuários
+CREATE TABLE IF NOT EXISTS battle_challenges (
+    id VARCHAR(60) PRIMARY KEY,
+    sender_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    format VARCHAR(20) NOT NULL DEFAULT '1v1',
+    deck_payload JSONB,
+    message VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'accepted', 'declined', 'canceled'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT no_self_challenge CHECK (sender_id != target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenges_sender ON battle_challenges(sender_id);
+CREATE INDEX IF NOT EXISTS idx_challenges_target ON battle_challenges(target_id);
+CREATE INDEX IF NOT EXISTS idx_challenges_status ON battle_challenges(status);
+
+-- Tabela do Sistema de Torneios Eliminatórios
+CREATE TABLE IF NOT EXISTS tournaments (
+    id VARCHAR(60) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(120) NOT NULL,
+    size INTEGER NOT NULL DEFAULT 8, -- 4, 8 ou 16 participantes
+    status VARCHAR(20) NOT NULL DEFAULT 'in_progress', -- 'in_progress', 'completed'
+    champion JSONB,
+    bracket_data JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tournaments_user ON tournaments(user_id);
+CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status);
+
+-- ============================================================================
+-- MIGRAÇÕES — ECONOMIA DE GIROS, COLEÇÃO, BUILDS E RANKING ONLINE (NEON)
+-- ============================================================================
+
+-- Adição de campos para a economia de giros e autenticação
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(80);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS spins_balance INTEGER NOT NULL DEFAULT 20;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(30) DEFAULT 'local';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- Coleção de Personagens Obtidos
+CREATE TABLE IF NOT EXISTS characters_collection (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(80) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    character_id VARCHAR(80) NOT NULL,
+    count INTEGER NOT NULL DEFAULT 1,
+    first_obtained TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_obtained TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_user_character UNIQUE (user_id, character_id)
+);
+CREATE INDEX IF NOT EXISTS idx_collection_user ON characters_collection(user_id);
+
+-- Construções do Combatente (Build Ativa e Presets)
+CREATE TABLE IF NOT EXISTS character_builds (
+    id VARCHAR(80) PRIMARY KEY,
+    user_id VARCHAR(80) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(120) NOT NULL,
+    avatar_id VARCHAR(80) NOT NULL,
+    signature_move VARCHAR(120),
+    stat_sources JSONB NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_builds_user ON character_builds(user_id);
+
+-- Histórico de Batalhas
+CREATE TABLE IF NOT EXISTS battles_history (
+    id VARCHAR(80) PRIMARY KEY,
+    user_id VARCHAR(80) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mode VARCHAR(30) NOT NULL,
+    is_win BOOLEAN NOT NULL,
+    player_placement INTEGER DEFAULT 1,
+    opponent_name VARCHAR(120),
+    opponent_avatar TEXT,
+    player_build_snapshot JSONB,
+    total_rounds INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_battles_user ON battles_history(user_id);
+
+-- Tabela de Classificação Global do Ranking
+CREATE TABLE IF NOT EXISTS ranking_stats (
+    user_id VARCHAR(80) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    player_name VARCHAR(120) NOT NULL,
+    avatar TEXT,
+    rank VARCHAR(10) DEFAULT 'D',
+    wins INTEGER NOT NULL DEFAULT 0,
+    losses INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0,
+    win_rate INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ranking_wins ON ranking_stats(wins DESC, win_rate DESC, total DESC);
+
+-- Tabela Idempotente de Recompensas de Giros (Arena e Torneio)
+CREATE TABLE IF NOT EXISTS rewards_log (
+    id VARCHAR(80) PRIMARY KEY,
+    user_id VARCHAR(80) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    battle_id VARCHAR(140) UNIQUE NOT NULL,
+    source VARCHAR(40) NOT NULL,
+    difficulty VARCHAR(20),
+    spins_awarded INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_rewards_user ON rewards_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_rewards_battle ON rewards_log(battle_id);
+
+-- Campo de dificuldade em tournaments
+ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS difficulty VARCHAR(20) DEFAULT 'medio';
+

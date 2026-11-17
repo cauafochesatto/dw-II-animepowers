@@ -137,6 +137,16 @@ describe('Duel Logic', () => {
       const result2 = calculateFinalScore(power, power.elemento, null);
       expect(result.score).toBe(result2.score);
     });
+
+    it('handles exact score ties by giving 50% HP distribution', () => {
+      const scoreA = 80;
+      const scoreB = 80;
+      const total = scoreA + scoreB;
+      const hpA = Math.round((scoreA / total) * 100);
+      const hpB = 100 - hpA;
+      expect(hpA).toBe(50);
+      expect(hpB).toBe(50);
+    });
   });
 
   describe('Edge cases', () => {

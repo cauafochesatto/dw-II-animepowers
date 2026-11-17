@@ -4,6 +4,7 @@ import powersData from '../data/powers.json';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { elementClass } from '../data/elementMeta';
 import { Plus, Trash, ArrowUpRight } from './Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 
 const MAX = 6;
 
@@ -125,17 +126,24 @@ export default function DeckBuilder() {
           <>
             <div className="codex__listhead" aria-hidden="true">
               <span />
+              <span />
               <span>Técnica</span>
-              <span>Elemento</span>
-              <span>Dano</span>
-              <span>Custo</span>
+              <span style={{ textAlign: 'right', paddingRight: '0.5rem' }}>Atributos</span>
               <span />
             </div>
             <div className="codex__list">
             {deckPowers.map((p, i) => (
               <article className="codex__entry" key={p.id}>
                 <span className="index-mark">{String(i + 1).padStart(2, '0')}</span>
-                <img className="codex__thumb" src={p.imagem} alt="" loading="lazy" />
+                <img
+                  className="codex__thumb"
+                  src={resolvePowerImage(p.imagem)}
+                  alt={p.nome}
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.visibility = 'hidden';
+                  }}
+                />
 
                 <div className="codex__text">
                   <h3 className="codex__name">
@@ -188,7 +196,16 @@ export default function DeckBuilder() {
         <div className="codex__list">
           {disponiveis.map((p) => (
             <article className="codex__entry" key={p.id}>
-              <img className="codex__thumb" src={p.imagem} alt="" loading="lazy" />
+              <span className="index-mark" aria-hidden="true">+</span>
+              <img
+                className="codex__thumb"
+                src={resolvePowerImage(p.imagem)}
+                alt={p.nome}
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.style.visibility = 'hidden';
+                }}
+              />
 
               <div className="codex__text">
                 <h3 className="codex__name">{p.nome}</h3>

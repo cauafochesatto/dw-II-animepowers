@@ -4,6 +4,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useReveal } from '../hooks/useReveal';
 import { elementClass } from '../data/elementMeta';
 import { Star, Plus, Swords, ArrowLeft, Check, Close } from '../components/Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 
 const MAX_DECK = 6;
 
@@ -60,7 +61,7 @@ export default function Poder() {
           <div className="pdetail__hero-media">
             <img
               className="pdetail__hero-img"
-              src={power.imagem}
+              src={resolvePowerImage(power.imagem)}
               alt={`Arte de ${power.nome}`}
               fetchPriority="high"
             />

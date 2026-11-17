@@ -1,0 +1,349 @@
+﻿diff --git a/functions/src/routes/auth.js b/functions/src/routes/auth.js
+index af31f5a..b84135d 100644
+--- a/functions/src/routes/auth.js
++++ b/functions/src/routes/auth.js
+@@ -15,7 +15,8 @@ authRouter.post('/register', async (c) => {
+ 
+     const cleanEmail = email.trim().toLowerCase();
+     const cleanUsername = (username || cleanEmail.split('@')[0]).trim();
+-    const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
++    // O servidor SEMPRE gera o identificador ├║nico para garantir integridade e isolamento
++    const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+ 
+     // Verifica e-mail existente
+     const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+@@ -54,33 +55,64 @@ authRouter.post('/register', async (c) => {
+   }
+ });
+ 
+-// Login
++// Login com autentica├º├úo inequ├¡voca e preven├º├úo de colis├úo de nomes
+ authRouter.post('/login', async (c) => {
+   try {
+     const body = await c.req.json();
+     const { email, username, password } = body;
+ 
+-    let userRes;
+-    if (email) {
+-      userRes = await query(
+-        'SELECT id, name, username, email, password, avatar, role, spins_balance, provider FROM users WHERE LOWER(email) = $1',
+-        [email.trim().toLowerCase()]
+-      );
+-    } else if (username) {
+-      userRes = await query(
+-        'SELECT id, name, username, email, password, avatar, role, spins_balance, provider FROM users WHERE LOWER(username) = $1',
+-        [username.trim().toLowerCase()]
++    const cleanInput = (email || username || '').trim().toLowerCase();
++    if (!cleanInput) {
++      return c.json({ error: 'Informe e-mail ou username.' }, 400);
++    }
++
++    let user = null;
++
++    if (cleanInput.includes('@')) {
++      // 1. Busca estrita por e-mail (chave ├║nica)
++      const emailRes = await query(
++        `SELECT id, name, username, email, password, avatar, role, spins_balance, provider
++         FROM users
++         WHERE LOWER(email) = $1`,
++        [cleanInput]
+       );
++      if (emailRes.rows.length > 0) {
++        user = emailRes.rows[0];
++      }
+     } else {
+-      return c.json({ error: 'Informe e-mail ou username.' }, 400);
++      // 2. Busca estrita por username
++      const usernameRes = await query(
++        `SELECT id, name, username, email, password, avatar, role, spins_balance, provider
++         FROM users
++         WHERE LOWER(username) = $1`,
++        [cleanInput]
++      );
++
++      if (usernameRes.rows.length === 1) {
++        user = usernameRes.rows[0];
++      } else if (usernameRes.rows.length === 0) {
++        // 3. Fallback seguro para display name: s├│ aceita se for estritamente un├¡voco
++        const nameRes = await query(
++          `SELECT id, name, username, email, password, avatar, role, spins_balance, provider
++           FROM users
++           WHERE LOWER(name) = $1`,
++          [cleanInput]
++        );
++
++        if (nameRes.rows.length > 1) {
++          return c.json({
++            error: 'Existem m├║ltiplos guerreiros com este nome de exibi├º├úo. Por favor, acesse utilizando seu e-mail cadastrado.',
++          }, 409);
++        } else if (nameRes.rows.length === 1) {
++          user = nameRes.rows[0];
++        }
++      }
+     }
+ 
+-    if (userRes.rows.length === 0) {
++    if (!user) {
+       return c.json({ error: 'Guerreiro n├úo encontrado no sistema.' }, 404);
+     }
+ 
+-    const user = userRes.rows[0];
+-
+     // Valida├º├úo de senha se existir no banco
+     if (user.password && password && user.password !== password) {
+       return c.json({ error: 'Senha incorreta.' }, 401);
+diff --git a/functions/src/routes/battles.js b/functions/src/routes/battles.js
+index b4de4c1..3045a18 100644
+--- a/functions/src/routes/battles.js
++++ b/functions/src/routes/battles.js
+@@ -1,6 +1,11 @@
+ import { Hono } from 'hono';
+ import { query, withTransaction } from '../db.js';
+-import { simulate1v1, scaleFighterStats, getRewardSpins } from '../battleEngine.js';
++import {
++  simulate1v1,
++  scaleFighterStats,
++  getRewardSpins,
++  validateTournamentChampion,
++} from '../battleEngine.js';
+ 
+ export const battlesRouter = new Hono();
+ 
+@@ -46,9 +51,10 @@ battlesRouter.post('/arena/resolve', async (c) => {
+     const simulation = simulate1v1(playerBuild, opponentBuild);
+     const isPlayerWinner = simulation.isPlayerWinner;
+ 
+-    const rewardSpins = isPlayerWinner ? getRewardSpins('arena', null, true) : 0;
++    // Regra da Economia: Arena N├âO concede giros
++    const rewardSpins = 0;
+ 
+-    // 3. Transa├º├úo at├┤mica no Neon: hist├│rico + recompensa + saldo de giros + ranking
++    // 3. Transa├º├úo at├┤mica no Neon: hist├│rico + recompensa (0) + ranking
+     const result = await withTransaction(async (client) => {
+       // Grava no hist├│rico de batalhas
+       await client.query(
+@@ -75,22 +81,9 @@ battlesRouter.post('/arena/resolve', async (c) => {
+         ['rew_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), userId, battleId, rewardSpins]
+       );
+ 
+-      // Atualiza saldo de giros se houve vit├│ria
+-      let newBalance = null;
+-      if (rewardSpins > 0) {
+-        const updateBalance = await client.query(
+-          `UPDATE users
+-           SET spins_balance = spins_balance + $1,
+-               updated_at = CURRENT_TIMESTAMP
+-           WHERE id = $2
+-           RETURNING spins_balance`,
+-          [rewardSpins, userId]
+-        );
+-        newBalance = updateBalance.rows[0]?.spins_balance;
+-      } else {
+-        const cur = await client.query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
+-        newBalance = cur.rows[0]?.spins_balance;
+-      }
++      // Consulta saldo atual
++      const cur = await client.query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
++      const newBalance = cur.rows[0]?.spins_balance ?? 0;
+ 
+       // Atualiza ranking_stats do jogador
+       await client.query(
+@@ -279,3 +272,198 @@ battlesRouter.post('/tournament/match', async (c) => {
+     return c.json({ error: 'Erro ao processar partida do torneio.' }, 500);
+   }
+ });
++
++/**
++ * Resolu├º├úo oficial e segura da Vit├│ria de Torneio (Conclus├úo do Campeonato)
++ * O backend N├âO confia em flags (`isPlayerWinner`) enviadas pelo cliente.
++ * Requer o objeto do torneio completo e valida├º├úo estrutural da chave e Grande Final.
++ * Concede a recompensa ├║nica de giros baseada na dificuldade:
++ * - F├ícil: +3 giros
++ * - M├®dio: +5 giros
++ * - Dif├¡cil: +8 giros
++ * - Derrota ou fraude: 0 giros
++ * Prote├º├úo at├┤mica e idempot├¬ncia estrita via chave composta (user_id, battle_id).
++ */
++battlesRouter.post('/tournament/resolve', async (c) => {
++  try {
++    const body = await c.req.json();
++    const {
++      userId,
++      tournament,
++      tournamentId,
++      playerBuild,
++    } = body;
++
++    if (!userId || (!tournament && !tournamentId)) {
++      return c.json({ error: 'Identificadores de usu├írio e torneio s├úo obrigat├│rios.' }, 400);
++    }
++
++    // 1. Valida├º├úo de seguran├ºa obrigat├│ria: n├úo aceita chamadas que n├úo enviem a estrutura do torneio
++    if (!tournament || typeof tournament !== 'object') {
++      return c.json({
++        success: false,
++        error: 'Valida├º├úo de integridade: a chave completa do torneio ├® obrigat├│ria para verifica├º├úo.',
++        spinsAwarded: 0,
++        isValid: false,
++      }, 403);
++    }
++
++    // 2. Valida├º├úo rigorosa no backend (participantes, rodadas, invencibilidade, Grande Final)
++    const validation = validateTournamentChampion(tournament, userId);
++    if (!validation.isValid) {
++      return c.json({
++        success: false,
++        error: validation.reason,
++        spinsAwarded: 0,
++        isValid: false,
++      }, 403);
++    }
++
++    const officialTournamentId = tournament.id || tournamentId;
++    // Identificador ├║nico com namespace de usu├írio: evita que dois jogadores com mesmo ID de torneio se bloqueiem
++    const battleLogId = `tourn_${userId}_${officialTournamentId}`;
++    const legacyBattleLogId = `tourn_${officialTournamentId}`;
++
++    // 3. Verifica├º├úo de idempot├¬ncia pr├®via
++    const existing = await query(
++      'SELECT id, spins_awarded FROM rewards_log WHERE (battle_id = $1 AND user_id = $2) OR (battle_id = $3 AND user_id = $2)',
++      [battleLogId, userId, legacyBattleLogId]
++    );
++
++    if (existing.rows.length > 0) {
++      const uRes = await query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
++      return c.json({
++        success: true,
++        alreadyProcessed: true,
++        message: 'A recompensa deste torneio j├í foi creditada anteriormente.',
++        spinsAwarded: 0,
++        currentSpins: uRes.rows[0]?.spins_balance ?? 0,
++      });
++    }
++
++    const rewardSpins = validation.rewardSpins;
++    const finalDifficulty = validation.difficulty;
++
++    // 4. Transa├º├úo at├┤mica no Neon PostgreSQL com trava FOR UPDATE
++    let result;
++    try {
++      result = await withTransaction(async (client) => {
++        // Bloqueia linha do usu├írio para evitar concorr├¬ncia simult├ónea
++        const userLock = await client.query(
++          'SELECT id, spins_balance FROM users WHERE id = $1 FOR UPDATE',
++          [userId]
++        );
++
++        if (userLock.rows.length === 0) {
++          throw new Error('Guerreiro n├úo encontrado no banco de dados.');
++        }
++
++        // Dupla checagem dentro da transa├º├úo protegida pelo bloqueio
++        const recheck = await client.query(
++          'SELECT id FROM rewards_log WHERE (battle_id = $1 AND user_id = $2) OR (battle_id = $3 AND user_id = $2)',
++          [battleLogId, userId, legacyBattleLogId]
++        );
++
++        if (recheck.rows.length > 0) {
++          return {
++            alreadyProcessed: true,
++            rewardSpins: 0,
++            newBalance: userLock.rows[0].spins_balance,
++          };
++        }
++
++        // Registra no hist├│rico de batalhas
++        await client.query(
++          `INSERT INTO battles_history
++           (id, user_id, mode, is_win, player_placement, opponent_name, opponent_avatar, player_build_snapshot, total_rounds)
++           VALUES ($1, $2, 'Torneio', true, 1, 'Grande Final do Torneio', NULL, $3, $4)
++           ON CONFLICT (id) DO NOTHING`,
++          [
++            battleLogId,
++            userId,
++            JSON.stringify(playerBuild || { name: validation.playerName || 'Campe├úo' }),
++            Array.isArray(tournament.rounds) ? tournament.rounds.length : 1,
++          ]
++        );
++
++        // Registra no log de recompensas (chave ├║nica)
++        await client.query(
++          `INSERT INTO rewards_log (id, user_id, battle_id, source, difficulty, spins_awarded)
++           VALUES ($1, $2, $3, 'tournament', $4, $5)`,
++          [
++            'rew_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
++            userId,
++            battleLogId,
++            finalDifficulty,
++            rewardSpins,
++          ]
++        );
++
++        // Credita os giros ao saldo do usu├írio no PostgreSQL
++        const updateBalance = await client.query(
++          `UPDATE users
++           SET spins_balance = spins_balance + $1,
++               updated_at = CURRENT_TIMESTAMP
++           WHERE id = $2
++           RETURNING spins_balance`,
++          [rewardSpins, userId]
++        );
++
++        const newBalance = updateBalance.rows[0]?.spins_balance ?? 0;
++
++        // Atualiza ranking_stats do campe├úo
++        await client.query(
++          `INSERT INTO ranking_stats (user_id, player_name, avatar, rank, wins, losses, total, win_rate)
++           VALUES ($1, $2, $3, 'S', 1, 0, 1, 100)
++           ON CONFLICT (user_id) DO UPDATE SET
++              wins = ranking_stats.wins + 1,
++              total = ranking_stats.total + 1,
++              win_rate = ROUND(((ranking_stats.wins + 1)::numeric / (ranking_stats.total + 1)::numeric) * 100),
++              updated_at = CURRENT_TIMESTAMP`,
++          [
++            userId,
++            playerBuild?.name || validation.playerName || 'Campe├úo',
++            playerBuild?.avatar || null,
++          ]
++        );
++
++        return { newBalance, rewardSpins, alreadyProcessed: false };
++      });
++    } catch (txErr) {
++      // Se houver conflito de chave ├║nica (c├│digo PostgreSQL 23505), foi uma requisi├º├úo duplicada simult├ónea
++      if (txErr.code === '23505') {
++        const uRes = await query('SELECT spins_balance FROM users WHERE id = $1', [userId]);
++        return c.json({
++          success: true,
++          alreadyProcessed: true,
++          message: 'A recompensa deste torneio j├í foi creditada anteriormente.',
++          spinsAwarded: 0,
++          currentSpins: uRes.rows[0]?.spins_balance ?? 0,
++        });
++      }
++      throw txErr;
++    }
++
++    if (result.alreadyProcessed) {
++      return c.json({
++        success: true,
++        alreadyProcessed: true,
++        message: 'A recompensa deste torneio j├í foi creditada anteriormente.',
++        spinsAwarded: 0,
++        currentSpins: result.newBalance,
++      });
++    }
++
++    return c.json({
++      success: true,
++      isPlayerWinner: true,
++      spinsAwarded: result.rewardSpins,
++      newBalance: result.newBalance,
++      difficulty: finalDifficulty,
++      message: `­ƒÅå CAMPE├âO DO TORNEIO (${finalDifficulty.toUpperCase()})! Voc├¬ conquistou +${result.rewardSpins} Giros!`,
++    });
++  } catch (err) {
++    console.error('[Tournament Resolve Error]', err);
++    return c.json({ error: 'Erro ao validar e registrar premia├º├úo do torneio.' }, 500);
++  }
++});

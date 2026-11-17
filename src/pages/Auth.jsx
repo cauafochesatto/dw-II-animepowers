@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import powersData from '../data/powers.json';
 import { elementClass } from '../data/elementMeta';
 import { ArrowRight, ArrowUpRight, Spark, Check, AlertTriangle, Info } from '../components/Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 import '../styles/auth.css';
 
 const DESTAQUES = [
@@ -19,7 +20,7 @@ export default function Auth({ initialMode = 'login' }) {
   const ehCadastro = location.pathname.includes('cadastro');
   const ehLogin = location.pathname.includes('login') ? true : !ehCadastro && initialMode === 'login';
 
-  const [email, setEmail] = useState('');
+  const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -32,6 +33,10 @@ export default function Auth({ initialMode = 'login' }) {
     login,
     register,
     renderGoogleButton,
+    loginWithGoogleSimulated,
+    startGoogleOAuthRedirect,
+    googleReady,
+    googleErrorDetails,
     currentUser
   } = useAuth();
 
@@ -46,32 +51,39 @@ export default function Auth({ initialMode = 'login' }) {
     }
   }, [currentUser, navigate]);
 
-  // Botão oficial do Google Identity Services. Enquanto ele não carrega,
-  // mostramos um aviso honesto em vez de um botão falso.
+  // Botão oficial do Google Identity Services. Quando pronto, renderiza;
+  // se falhar ou estiver offline, mantém a contingência acessível.
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let active = true;
+    const tryRender = () => {
       if (!googleBtnContainerRef.current) return;
       const ok = renderGoogleButton(googleBtnContainerRef.current, { width: 320 });
-      setGooglePronto(Boolean(ok));
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [renderGoogleButton]);
+      if (active && ok) setGooglePronto(true);
+    };
+
+    tryRender();
+    const timer = setTimeout(tryRender, 600);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [renderGoogleButton, googleReady]);
 
   function trocarModo(paraCadastro) {
     setAlert(null);
     navigate(paraCadastro ? '/cadastro' : '/login');
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setAlert(null);
 
-    if (!email.trim() || !password.trim()) {
+    if (!nickname.trim() || !password.trim()) {
       setAlert({
         type: 'error',
         text: ehLogin
-          ? 'Informe e-mail e senha para continuar.'
-          : 'Preencha e-mail e senha para criar a conta.'
+          ? 'Informe seu nickname e senha para continuar.'
+          : 'Preencha o nickname e a senha para criar sua conta.'
       });
       return;
     }
@@ -82,23 +94,25 @@ export default function Auth({ initialMode = 'login' }) {
     }
 
     setIsLoading(true);
-    const res = ehLogin ? login(email, password, rememberMe) : register(email, password, null);
+    const res = ehLogin
+      ? await login(nickname, password, rememberMe)
+      : await register(nickname, password, null);
     setIsLoading(false);
 
-    if (res.success) {
+    if (res?.success) {
       setAlert({ type: 'success', text: `${res.message} Levando você ao catálogo...` });
       setTimeout(() => navigate('/catalogo'), 700);
     } else {
-      setAlert({ type: 'error', text: res.message });
+      setAlert({ type: 'error', text: res?.message || 'Erro ao processar solicitação.' });
     }
   }
 
   function handleForgotPassword() {
     setAlert({
       type: 'info',
-      text: email
-        ? `A recuperação de senha depende de um backend e ainda não está disponível. Você pode criar uma nova conta com ${email}.`
-        : 'A recuperação de senha depende de um backend e ainda não está disponível.'
+      text: nickname
+        ? `A recuperação de senha depende de um servidor externo. Caso tenha esquecido a senha de "${nickname}", basta criar uma conta com um novo nickname.`
+        : 'A recuperação de senha depende de um servidor externo. Você pode criar uma conta com um novo nickname.'
     });
   }
 
@@ -133,31 +147,78 @@ export default function Auth({ initialMode = 'login' }) {
 
         <div ref={googleBtnContainerRef} className="auth__google-native" />
 
-        {!googlePronto && (
-          <p className="auth__google-off">
-            O acesso com Google não pôde ser carregado — o recurso depende de conexão com o
-            Google. Use e-mail e senha abaixo.
-          </p>
+        {googleErrorDetails && (
+          <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.8rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--neg)', borderRadius: 'var(--r-xs)', fontSize: '0.78rem', color: 'var(--text-2)' }}>
+            <span style={{ fontWeight: 700, color: 'var(--neg)', display: 'block', marginBottom: '0.2rem' }}>
+              Aviso de Conexão com Google:
+            </span>
+            {googleErrorDetails}
+            <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                onClick={startGoogleOAuthRedirect}
+                style={{ fontSize: '0.72rem' }}
+              >
+                Tentar via Redirecionamento OAuth
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => loginWithGoogleSimulated()}
+                style={{ fontSize: '0.72rem' }}
+              >
+                Entrar com Perfil Google Demo
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!googlePronto && !googleErrorDetails && (
+          <div style={{ textAlign: 'center', marginBlock: '0.5rem' }}>
+            <p className="auth__google-off" style={{ marginBottom: '0.6rem' }}>
+              O prompt do Google não foi detectado externamente. Você pode tentar via redirecionamento ou entrar via nickname.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={startGoogleOAuthRedirect}
+                style={{ fontSize: '0.8rem' }}
+              >
+                Google OAuth (Redirecionamento)
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => loginWithGoogleSimulated()}
+                style={{ fontSize: '0.8rem' }}
+              >
+                Google (Perfil Simulado)
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="auth__divider">
-          <span>{googlePronto ? 'ou use e-mail' : 'acesso por e-mail'}</span>
+          <span>{googlePronto ? 'ou use seu nickname' : 'acesso por nickname'}</span>
         </div>
 
         <form className="auth__form" onSubmit={handleSubmit} noValidate>
           <div className="field">
-            <label className="field__label" htmlFor="auth-email">
-              E-mail
+            <label className="field__label" htmlFor="auth-nickname">
+              Nickname
             </label>
             <input
-              id="auth-email"
+              id="auth-nickname"
               className="input"
-              type="email"
-              placeholder="voce@exemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              placeholder={ehLogin ? "Seu nickname" : "Escolha seu nickname (ex: Goku99)"}
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
+              maxLength={30}
             />
           </div>
 
@@ -262,7 +323,14 @@ export default function Auth({ initialMode = 'login' }) {
             .map((p) => (
               <li key={p.id} className={elementClass(p.elemento)}>
                 <Link to={`/poder/${p.id}`}>
-                  <img src={p.imagem} alt="" loading="lazy" />
+                  <img
+                    src={resolvePowerImage(p.imagem)}
+                    alt={p.nome}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.visibility = 'hidden';
+                    }}
+                  />
                   <span className="auth__showcase-copy">
                     <span className="tag">{p.elemento}</span>
                     <span className="auth__showcase-name">{p.nome}</span>

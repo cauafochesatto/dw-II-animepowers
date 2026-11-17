@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import powersData from '../data/powers.json';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useReveal } from '../hooks/useReveal';
 import { elementClass, elementColor } from '../data/elementMeta';
 import PowerCard from '../components/PowerCard';
 import { ArrowUpRight, ArrowRight, Swords, Book, Spark } from '../components/Icons';
+import { resolvePowerImage } from '../utils/imageHelper';
 
 const RAIL_SIZE = 12;
 
 export default function Home() {
-  const navigate = useNavigate();
   const revealRef = useReveal();
   const [favoritos, setFavoritos] = useLocalStorage('pa:favoritos', []);
 
@@ -102,7 +102,7 @@ export default function Home() {
           <div className="hero__feature-media">
             <img
               className="hero__feature-img"
-              src={feature.imagem}
+              src={resolvePowerImage(feature.imagem)}
               alt={`Arte de ${feature.nome}`}
               fetchPriority="high"
             />
@@ -175,6 +175,95 @@ export default function Home() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      {/* --- Módulo de Batalhas & Construção (Build An Anime Character) --- */}
+      <section className="shell" style={{ margin: '3.5rem auto 2.5rem' }}>
+        <div
+          style={{
+            background: 'radial-gradient(circle at center, #1a1a26 0%, #08080c 100%)',
+            border: '2px solid var(--line-strong)',
+            borderRadius: 'var(--r-lg)',
+            padding: '2.5rem',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.7)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1.5rem',
+              marginBottom: '2rem',
+            }}
+          >
+            <div>
+              <span className="index-mark" style={{ color: 'var(--signal)' }}>
+                Novo Sistema — Inspirado em Build An Anime Character
+              </span>
+              <h2
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '2.4rem',
+                  textTransform: 'uppercase',
+                  margin: '0.2rem 0',
+                }}
+              >
+                Gire · Colete · Construa · Domine a Arena
+              </h2>
+              <p style={{ color: 'var(--text-2)', maxWidth: '650px', fontSize: '1rem', lineHeight: 1.5 }}>
+                Invoque guerreiros de anime com raridades de Comum até Mítico, selecione os melhores atributos
+                individuais (Força, Velocidade, Defesa, Resistência, Energia e Poder Especial) e desafie outros
+                lutadores e IA em confrontos 1v1, 2v2 e Battle Royale de 6 combatentes.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+              <Link
+                to="/giros"
+                className="btn btn--lg"
+                style={{ background: 'var(--signal)', color: 'var(--signal-ink)' }}
+              >
+                🎲 Girar Personagens
+              </Link>
+              <Link to="/construir" className="btn btn--lg btn--ghost">
+                🛠️ Construir Personagem
+              </Link>
+              <Link to="/arena" className="btn btn--lg btn--ghost">
+                ⚔️ Entrar na Arena
+              </Link>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '1rem',
+            }}
+          >
+            <div style={{ background: 'var(--surface-1)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', padding: '1.2rem' }}>
+              <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '0.5rem' }}>🎲</span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', textTransform: 'uppercase' }}>1. Giros e Invocação</h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: 0 }}>Sorteie personagens com probabilidades reais e animação de revelação.</p>
+            </div>
+            <div style={{ background: 'var(--surface-1)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', padding: '1.2rem' }}>
+              <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '0.5rem' }}>📖</span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', textTransform: 'uppercase' }}>2. Minha Coleção</h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: 0 }}>Acervo permanente com filtros por atributos, cópias acumuladas e detalhes dos golpes.</p>
+            </div>
+            <div style={{ background: 'var(--surface-1)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', padding: '1.2rem' }}>
+              <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '0.5rem' }}>🛠️</span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', textTransform: 'uppercase' }}>3. Síntese de Atributos</h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: 0 }}>Escolha a força de um, velocidade de outro e monte sua classificação de Rank D até SSS.</p>
+            </div>
+            <div style={{ background: 'var(--surface-1)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', padding: '1.2rem' }}>
+              <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '0.5rem' }}>⚔️</span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', textTransform: 'uppercase' }}>4. Arena de Combate</h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: 0 }}>Lute em 1v1, 2v2 e Battle Royale de 6 combatentes com motor tático round-by-round.</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -298,11 +387,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="arena__foot">
-                <Link
-                  className="btn"
-                  to="/duelo"
-                  onClick={() => navigate('/duelo')}
-                >
+                <Link className="btn" to="/duelo">
                   <Swords size={16} />
                   Entrar na arena
                   <ArrowRight className="btn__arrow" />

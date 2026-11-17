@@ -2,6 +2,9 @@
 
 Tema: **Poderes de Anime** (Ninjutsu, Akuma no Mi, Nen, Ki, Feitiços, Respiração, Stand, Reiatsu).
 
+**Site publicado:** https://cauafochesatto.github.io/dw-II-animepowers/
+**Repositório:** https://github.com/cauafochesatto/dw-II-animepowers
+
 ## 1. Visão Geral
 **Objetivo:** catalogar habilidades de animes e permitir simulação lúdica de duelos, montagem de grimório/deck e descoberta de afinidade elemental.
 
@@ -56,14 +59,14 @@ Tema: **Poderes de Anime** (Ninjutsu, Akuma no Mi, Nen, Ki, Feitiços, Respiraç
 **RNF4 — Segurança/Estabilidade:** validação (quiz incompleto, duelo igual, deck duplicado/limite, JSON inválido), try/catch no LocalStorage, rota `*` → Home.
 
 ## 5. Guia de Acesso e Execução
-Repositório: `https://github.com/ragavabe/dw-II-animepowers`
+Repositório: `https://github.com/cauafochesatto/dw-II-animepowers`
 
 Rodar localmente:
 ```bash
-git clone https://github.com/ragavabe/dw-II-animepowers.git
+git clone https://github.com/cauafochesatto/dw-II-animepowers.git
 cd dw-II-animepowers
 npm install
-npm run dev     # http://localhost:5173/poderesanime/
+npm run dev     # http://localhost:5173/
 npm run build   # build de produção (gera dist/)
 npm run preview # serve o dist localmente
 npm test        # suíte Vitest
@@ -73,7 +76,7 @@ npm run lint    # oxlint
 **Deploy:** push na `main` → `.github/workflows/deploy.yml` builda e publica `dist/` no Pages
 (Settings → Pages → “GitHub Actions”). O workflow define
 `VITE_BASE_PATH=/dw-II-animepowers/`, então o site funciona em
-`https://ragavabe.github.io/dw-II-animepowers/` sem nenhuma configuração local.
+`https://cauafochesatto.github.io/dw-II-animepowers/` sem nenhuma configuração local.
 
 > Para testar um build igual ao do Pages localmente, rode:
 > ```bash

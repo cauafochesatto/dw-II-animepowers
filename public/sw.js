@@ -1,6 +1,6 @@
 // Service Worker — suporte offline (PWA)
 // Os caminhos são resolvidos a partir da localização do próprio script, que o
-// navegador coloca em /poderesanime/ em produção.
+// navegador coloca em /dw-II-animepowers/ no GitHub Pages.
 const VERSION = 'v2';
 const CACHE = `anime-powers-${VERSION}`;
 

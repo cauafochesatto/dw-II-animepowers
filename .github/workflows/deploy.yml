@@ -24,6 +24,10 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
+        env:
+          # GitHub Pages publica em https://ragavabe.github.io/dw-II-animepowers/
+          # sem isso o Vite gera assets em /assets/... e o site quebra com 404.
+          VITE_BASE_PATH: /dw-II-animepowers/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist

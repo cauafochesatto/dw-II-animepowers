@@ -4,14 +4,18 @@
     <meta charset="UTF-8" />
     <title>Anime Powers</title>
     <script>
-      // SPA fallback para GitHub Pages: redireciona 404 para HashRouter
+      // SPA fallback para GitHub Pages.
+      // O app usa HashRouter, então qualquer rota válida fica depois do '#'.
+      // Aqui só redirecionamos caminhos desconhecidos para a raiz do site.
       (function () {
-        var r = sessionStorage.redirect;
-        delete sessionStorage.redirect;
+        var base = '/dw-II-animepowers/';
+        if (window.location.pathname !== base) {
+          window.location.replace(base);
+        }
       })();
     </script>
   </head>
   <body>
-    <p>Página não encontrada. <a href="/poderesanime/">Voltar ao início</a></p>
+    <p>Página não encontrada. <a href="/dw-II-animepowers/">Voltar ao início</a></p>
   </body>
 </html>

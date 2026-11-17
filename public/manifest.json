@@ -2,7 +2,7 @@
   "name": "Anime Powers — Arquivo de Técnicas",
   "short_name": "Anime Powers",
   "description": "Arquivo de técnicas de anime com atributos comparáveis, arena de duelo, grimório pessoal e teste de afinidade elemental.",
-  "id": "/poderesanime/",
+  "id": "/dw-II-animepowers/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

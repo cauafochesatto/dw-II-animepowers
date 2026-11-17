@@ -70,14 +70,14 @@ npm test        # suíte Vitest
 npm run lint    # oxlint
 ```
 
-**Deploy:** push na `main` → `.github/workflows/deploy.yml` publica `dist/` no Pages
-(Settings → Pages → “GitHub Actions”).
+**Deploy:** push na `main` → `.github/workflows/deploy.yml` builda e publica `dist/` no Pages
+(Settings → Pages → “GitHub Actions”). O workflow define
+`VITE_BASE_PATH=/dw-II-animepowers/`, então o site funciona em
+`https://ragavabe.github.io/dw-II-animepowers/` sem nenhuma configuração local.
 
-> ⚠️ **Verificar antes de publicar:** o `base` do Vite está em `/poderesanime/`, mas o
-> reposório se chama `dw-II-animepowers`. O GitHub Pages serviria o site em
-> `/dw-II-animepowers/`. Defina a variável de ambiente antes do build, sem tocar no código:
+> Para testar um build igual ao do Pages localmente, rode:
 > ```bash
-> VITE_BASE_PATH=/dw-II-animepowers/ npm run build
+> VITE_BASE_PATH=/dw-II-animepowers/ npm run build && npm run preview
 > ```
 > Para um domínio próprio, use `VITE_BASE_PATH=/`.
 
